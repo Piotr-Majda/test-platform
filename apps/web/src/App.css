@@ -1294,3 +1294,276 @@ a.primary {
     grid-template-columns: 1fr;
   }
 }
+
+/* Compact layouts keep the dashboard usable for quick checks from a phone.
+   Dense result tables remain tables and scroll horizontally instead of
+   collapsing every value into an unreadable column. */
+@media (max-width: 640px) {
+  :root {
+    --header-h: auto;
+  }
+
+  body {
+    background:
+      radial-gradient(650px 360px at 10% -10%, #24362d 0%, transparent 58%),
+      var(--bg);
+  }
+
+  .app-header {
+    position: static;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.55rem 0.75rem;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .app-header-brand {
+    min-width: 0;
+  }
+
+  .brand-link {
+    display: block;
+    overflow: hidden;
+    font-size: 1.2rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app-nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    gap: 0.35rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .nav-link {
+    flex: 0 0 auto;
+    min-height: 2.5rem;
+    padding: 0.55rem 0.7rem;
+  }
+
+  .app-header-actions {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 0.3rem;
+  }
+
+  .app-header-actions .ghost {
+    min-height: 2.5rem;
+    padding-inline: 0.55rem;
+  }
+
+  .app-subheader {
+    top: 0;
+  }
+
+  .app-main {
+    padding: 1rem 0.75rem 3rem;
+  }
+
+  .page-subhead-inner {
+    display: grid;
+    padding: 0.7rem 0.75rem;
+  }
+
+  .page-subhead-inner > *,
+  .sticky-run-main,
+  .sticky-run-main > * {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .page-subhead-inner > .row-actions,
+  .sticky-run-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .page-subhead-inner > .row-actions > *,
+  .sticky-run-actions > * {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .sticky-run-main {
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .sticky-run-status {
+    align-items: flex-start;
+  }
+
+  .panel {
+    min-height: 0;
+    padding: 0.85rem 0.75rem 1rem;
+  }
+
+  .panel-head,
+  .log-viewer-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scenario-list li,
+  .draft-list li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scenario-list li {
+    gap: 0.75rem;
+    padding: 0.7rem;
+  }
+
+  .scenario-list li > .row-actions,
+  .draft-list li > .row-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .scenario-list li > .row-actions > *,
+  .draft-list li > .row-actions > * {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .scenario-list li > .row-actions .primary {
+    grid-column: 1 / -1;
+  }
+
+  .row-actions {
+    flex-wrap: wrap;
+  }
+
+  .primary,
+  .ghost,
+  a.primary,
+  a.button-link {
+    min-height: 2.75rem;
+  }
+
+  .field-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .field-row .field {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .test-chip {
+    max-width: 100%;
+  }
+
+  .totals,
+  .test-block,
+  .table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table,
+  .data-table {
+    width: 46rem;
+    min-width: 46rem;
+    table-layout: fixed;
+    font-size: 0.85rem;
+  }
+
+  .totals table:not(.steps-table) {
+    width: 34rem;
+    min-width: 34rem;
+  }
+
+  th,
+  td {
+    padding: 0.5rem 0.4rem;
+  }
+
+  .test-block {
+    padding: 0.65rem;
+  }
+
+  .table-scroll:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .test-meta-title {
+    align-items: flex-start;
+  }
+
+  .fp-timeline-row {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .fp-timeline-meta small {
+    white-space: normal;
+  }
+
+  .recent-popover {
+    right: auto;
+    left: 0;
+    max-width: min(16rem, calc(100vw - 2rem));
+  }
+
+  .log-children {
+    padding-left: 0.65rem;
+  }
+
+  .log-row {
+    align-items: flex-start;
+  }
+
+  .log-message,
+  .log-meta,
+  .log-data,
+  .event pre,
+  .error-trace {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .login-page {
+    align-items: start;
+    padding: 1rem;
+  }
+
+  .login-card {
+    margin-top: max(1rem, env(safe-area-inset-top));
+    padding: 1.25rem;
+  }
+
+  .login-card h1 {
+    font-size: 1.9rem;
+  }
+}
+
+@media (max-width: 390px) {
+  .role-badge {
+    display: none;
+  }
+
+  .app-header-actions .ghost {
+    padding-inline: 0.45rem;
+    font-size: 0.82rem;
+  }
+
+  .page-subhead-inner > .row-actions,
+  .sticky-run-actions {
+    grid-template-columns: 1fr;
+  }
+}

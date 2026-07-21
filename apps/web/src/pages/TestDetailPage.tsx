@@ -295,7 +295,8 @@ export function TestDetailPage() {
         {!group || group.steps.length === 0 ? (
           <p className="muted">No steps recorded for this test in the run.</p>
         ) : (
-          <table className="data-table steps-table">
+          <div className="table-scroll" role="region" aria-label="Test step results" tabIndex={0}>
+            <table className="data-table steps-table">
             <thead>
               <tr>
                 <th>Step</th>
@@ -357,7 +358,8 @@ export function TestDetailPage() {
                 )
               })}
             </tbody>
-          </table>
+            </table>
+          </div>
         )}
       </section>
 
