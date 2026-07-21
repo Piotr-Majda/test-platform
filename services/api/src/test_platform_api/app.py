@@ -185,7 +185,13 @@ def create_app(
     publisher: EventPublisher,
     analyzer: FailureAnalyzer | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="Test Platform API", version="0.7.0")
+    app = FastAPI(
+        title="Test Platform API",
+        version="0.7.0",
+        docs_url="/api/docs",
+        redoc_url=None,
+        openapi_url="/api/openapi.json"
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
