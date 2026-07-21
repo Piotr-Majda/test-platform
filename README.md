@@ -1,4 +1,4 @@
-# Test Platform v2
+# Test Platform
 
 Portfolio platform for orchestrating UI/API test scenarios with run history, flakiness insights, artifact retention, and optional AI failure analysis.
 
