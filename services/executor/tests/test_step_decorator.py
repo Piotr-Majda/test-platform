@@ -33,9 +33,11 @@ def test_successful_step_emits_nested_step_log_json() -> None:
     assert "step.log.json" in names
     assert "test.log.json" in names  # pass-path aggregated log for audit / false-positive checks
 
-    step_log_path = root / "run-1" / "open_page" / "step.log.json"
+    step_log_path = root / "run-1" / "google_title" / "open_page" / "step.log.json"
     payload = json.loads(step_log_path.read_text(encoding="utf-8"))
-    assert payload["step"] == "open_page"
+    assert payload["schema_version"] == "1.0"
+    assert payload["step_id"] == "open_page"
+    assert payload["duration_ms"] >= 0
     assert payload["entries"][0]["layer"] == "domain"
     assert payload["entries"][0]["children"][0]["layer"] == "adapter"
     assert payload["entries"][0]["children"][0]["children"][0]["layer"] == "framework"
@@ -44,7 +46,7 @@ def test_successful_step_emits_nested_step_log_json() -> None:
         (root / "run-1" / "google_title" / "test.log.json").read_text(encoding="utf-8")
     )
     assert test_log["test_id"] == "google_title"
-    assert test_log["steps"][0]["step"] == "open_page"
+    assert test_log["steps"][0]["step_id"] == "open_page"
 
 
 def test_failed_step_emits_html_snapshot_artifact() -> None:

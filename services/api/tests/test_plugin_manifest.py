@@ -1,7 +1,7 @@
 """Plugin manifest registration — Given / When / Then."""
 
 from fastapi.testclient import TestClient
-from test_platform_contracts import CONTRACTS_VERSION
+from test_platform_contracts import CONTRACTS_VERSION, LOG_SCHEMA_VERSION
 
 from test_platform_api.app import create_app
 from test_platform_api.db import create_session_factory
@@ -52,6 +52,25 @@ def test_register_manifest_rejects_contracts_version_mismatch() -> None:
 
     assert response.status_code == 409
     assert "contracts_version" in response.json()["detail"]
+
+
+def test_register_manifest_rejects_log_schema_version_mismatch() -> None:
+    client = _client()
+
+    response = client.post(
+        "/plugins/manifest",
+        json={
+            "plugin_id": "example",
+            "framework_version": "0.1.0",
+            "contracts_version": CONTRACTS_VERSION,
+            "log_schema_version": LOG_SCHEMA_VERSION,
+            "log_schema_version": "0.0",
+            "tests": [],
+        },
+    )
+
+    assert response.status_code == 409
+    assert "log_schema_version" in response.json()["detail"]
 
 
 def test_register_manifest_replaces_plugin_catalog() -> None:

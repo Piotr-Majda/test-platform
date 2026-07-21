@@ -9,13 +9,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, sessionmaker
 from test_platform_contracts import (
     CONTRACTS_VERSION,
+    LOG_SCHEMA_VERSION,
     AnalysisReport,
     AnalysisRequest,
     ArtifactRetentionConfig,
     ExecuteTestCommand,
     HistoryConfig,
     PluginManifest,
+    StepLogDocument,
     TestDefinition,
+    TestLogDocument,
     TestRunEvent,
     TestRunEventType,
 )
@@ -43,6 +46,7 @@ from test_platform_api.history import (
     scenario_duration_from_events,
     test_outcome_from_events,
 )
+from test_platform_api.logs import LogDocumentError, load_step_log, load_test_log
 from test_platform_api.ports import EventPublisher
 from test_platform_api.projections import RunProjection, project_run
 
@@ -295,6 +299,14 @@ def create_app(
                 detail=(
                     f"contracts_version mismatch: plugin={body.contracts_version!r} "
                     f"platform={CONTRACTS_VERSION!r}"
+                ),
+            )
+        if body.log_schema_version != LOG_SCHEMA_VERSION:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"log_schema_version mismatch: plugin={body.log_schema_version!r} "
+                    f"platform={LOG_SCHEMA_VERSION!r}"
                 ),
             )
         repo.upsert_plugin(body.plugin_id, body.framework_version)
@@ -647,6 +659,53 @@ def create_app(
             events=events,
             projection=project_run(events),
         )
+
+    @app.get("/runs/{run_id}/tests/{test_id}/logs", response_model=TestLogDocument)
+    def get_test_logs(
+        run_id: str,
+        test_id: str,
+        repo: SqlAlchemyRepository = Depends(get_repo),
+    ) -> TestLogDocument:
+        if repo.get_run(run_id) is None:
+            raise HTTPException(status_code=404, detail="run not found")
+        try:
+            document = load_test_log(
+                artifact_storage(),
+                run_id=run_id,
+                test_id=test_id,
+                events=repo.list_events(run_id),
+            )
+        except LogDocumentError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if document is None:
+            raise HTTPException(status_code=404, detail="test logs not found")
+        return document
+
+    @app.get(
+        "/runs/{run_id}/tests/{test_id}/steps/{step_id}/logs",
+        response_model=StepLogDocument,
+    )
+    def get_step_logs(
+        run_id: str,
+        test_id: str,
+        step_id: str,
+        repo: SqlAlchemyRepository = Depends(get_repo),
+    ) -> StepLogDocument:
+        if repo.get_run(run_id) is None:
+            raise HTTPException(status_code=404, detail="run not found")
+        try:
+            document = load_step_log(
+                artifact_storage(),
+                run_id=run_id,
+                test_id=test_id,
+                step_id=step_id,
+                events=repo.list_events(run_id),
+            )
+        except LogDocumentError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if document is None:
+            raise HTTPException(status_code=404, detail="step logs not found")
+        return document
 
     @app.post("/runs/{run_id}/events", status_code=204)
     def ingest_event(

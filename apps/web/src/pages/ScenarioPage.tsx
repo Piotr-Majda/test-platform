@@ -3,8 +3,8 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   artifactUrl,
   cacheRunAnalysis,
-  fetchLogDocument,
-  fetchTestLogForRun,
+  fetchStepLogs,
+  fetchTestLogs,
   getAnalysis,
   getRun,
   getScenarioHistory,
@@ -14,12 +14,10 @@ import {
   startRun,
   tryGetRunAnalysis,
   type AnalysisReport,
-  type ArtifactRef,
   type LogDocument,
   type RunDetail,
   type Scenario,
   type ScenarioHistory,
-  type StepView,
 } from '../api'
 import { AnalysisPanel } from '../components/AnalysisPanel'
 import { AnalysisSpinner, IconAnalyzed, IconNotAnalyzed } from '../components/AnalysisStateIcon'
@@ -49,7 +47,6 @@ export function ScenarioPage() {
   const [logTitle, setLogTitle] = useState('')
   const [logDocument, setLogDocument] = useState<LogDocument | null>(null)
   const [logError, setLogError] = useState<string | null>(null)
-  const [logDownloadUrl, setLogDownloadUrl] = useState<string | null>(null)
   const logViewRef = useRef<HTMLElement | null>(null)
   const analysisViewRef = useRef<HTMLElement | null>(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
@@ -245,42 +242,32 @@ export function ScenarioPage() {
     }
   }
 
-  const openLogPath = async (title: string, relativePath: string) => {
+  const prepareConsole = (title: string) => {
     setLogOpen(true)
     setLogTitle(title)
     setLogDocument(null)
     setLogError(null)
-    setLogDownloadUrl(artifactUrl(relativePath))
     window.requestAnimationFrame(() => {
       logViewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
+  }
+
+  const openStepConsole = async (runId: string, testId: string, stepId: string) => {
+    prepareConsole(`Step ${stepId} · console`)
     try {
-      setLogDocument(await fetchLogDocument(relativePath))
+      setLogDocument(await fetchStepLogs(runId, testId, stepId))
     } catch (err) {
-      setLogError(err instanceof Error ? err.message : 'Failed to load log')
+      setLogError(err instanceof Error ? err.message : 'Failed to load step console')
     }
   }
 
-  const openStepLog = (stepName: string, artifact: ArtifactRef) => {
-    void openLogPath(`${stepName} · ${artifact.name}`, artifact.relative_path)
-  }
-
-  const openTestLog = (runId: string, testId?: string | null, steps?: StepView[]) => {
-    const label = testId ? `Test ${testId}` : 'Test log'
-    setLogOpen(true)
-    setLogTitle(`${label} · logs`)
-    setLogDocument(null)
-    setLogError(null)
-    setLogDownloadUrl(null)
-    window.requestAnimationFrame(() => {
-      logViewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-    void fetchTestLogForRun(runId, testId, steps ?? run?.projection.steps ?? [])
-      .then(({ document, downloadUrl }) => {
-        setLogDocument(document)
-        setLogDownloadUrl(downloadUrl)
-      })
-      .catch((err) => setLogError(err instanceof Error ? err.message : 'Failed to load log'))
+  const openTestConsole = async (runId: string, testId: string) => {
+    prepareConsole(`Test ${testId} · console`)
+    try {
+      setLogDocument(await fetchTestLogs(runId, testId))
+    } catch (err) {
+      setLogError(err instanceof Error ? err.message : 'Failed to load test console')
+    }
   }
 
   const toggleErrorExpand = (key: string) => {
@@ -420,6 +407,7 @@ export function ScenarioPage() {
                         <th>Test</th>
                         <th>Status</th>
                         <th>Time</th>
+                        <th>Console</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -447,6 +435,16 @@ export function ScenarioPage() {
                           </td>
                           <td>{test.status}</td>
                           <td>{formatMs(test.duration_ms)}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="ghost artifact-open"
+                              disabled={busy || test.status === 'not run'}
+                              onClick={() => void openTestConsole(run.id, test.test_id)}
+                            >
+                              Console
+                            </button>
+                          </td>
                           <td>
                             <Link
                               className="ghost button-link"
@@ -477,7 +475,7 @@ export function ScenarioPage() {
                             <th>Status</th>
                             <th>Time</th>
                             <th>Error</th>
-                            <th>Logs</th>
+                            <th>Console</th>
                             <th>Artifacts / Detail</th>
                           </tr>
                         </thead>
@@ -509,9 +507,9 @@ export function ScenarioPage() {
                                 type="button"
                                 className="ghost artifact-open"
                                 disabled={busy || !group.testId}
-                                onClick={() => openTestLog(run.id, group.testId, group.steps)}
+                                onClick={() => void openTestConsole(run.id, group.testId!)}
                               >
-                                Open test logs
+                                Console
                               </button>
                             </td>
                             <td>
@@ -534,13 +532,6 @@ export function ScenarioPage() {
                           {group.steps.map((step, index) => {
                             const errorKey = `${run.id}-${group.testId}-${step.name}-${index}`
                             const expanded = expandedErrors.has(errorKey)
-                            const logArts = step.artifacts.filter(
-                              (a) =>
-                                a.name !== 'test.log.json' &&
-                                (a.kind === 'log' ||
-                                  a.name.endsWith('.log.json') ||
-                                  a.name.includes('log.json')),
-                            )
                             const otherArts = step.artifacts.filter(
                               (a) =>
                                 a.name !== 'test.log.json' &&
@@ -579,19 +570,18 @@ export function ScenarioPage() {
                                   )}
                                 </td>
                                 <td className="col-artifacts">
-                                  {logArts.length === 0
-                                    ? '—'
-                                    : logArts.map((artifact) => (
-                                        <button
-                                          key={artifact.id}
-                                          type="button"
-                                          className="ghost artifact-open"
-                                          disabled={busy}
-                                          onClick={() => void openStepLog(step.name, artifact)}
-                                        >
-                                          {artifact.name}
-                                        </button>
-                                      ))}
+                                  {group.testId ? (
+                                    <button
+                                      type="button"
+                                      className="ghost artifact-open"
+                                      disabled={busy}
+                                      onClick={() => void openStepConsole(run.id, group.testId!, step.name)}
+                                    >
+                                      Console
+                                    </button>
+                                  ) : (
+                                    '—'
+                                  )}
                                 </td>
                                 <td className="col-artifacts">
                                   {otherArts.length === 0
@@ -678,18 +668,16 @@ export function ScenarioPage() {
 
       {logOpen ? (
         <section ref={logViewRef} className="panel wide" aria-labelledby="log-view">
-          <h2 id="log-view">Logs</h2>
+          <h2 id="log-view">Console</h2>
           <StepLogViewer
             title={logTitle}
             document={logDocument}
             error={logError}
-            downloadUrl={logDownloadUrl}
             onClose={() => {
               setLogOpen(false)
               setLogDocument(null)
               setLogError(null)
               setLogTitle('')
-              setLogDownloadUrl(null)
             }}
           />
         </section>

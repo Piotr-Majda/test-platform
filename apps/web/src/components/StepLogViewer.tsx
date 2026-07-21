@@ -4,6 +4,27 @@ import { formatTime } from '../lib/format'
 
 export const LOG_LAYERS = ['domain', 'adapter', 'framework'] as const
 
+function flattenNodes(nodes: LogNode[], stepId: string): Array<{ node: LogNode; stepId: string }> {
+  return nodes.flatMap((node) => [
+    { node, stepId },
+    ...flattenNodes(node.children ?? [], stepId),
+  ])
+}
+
+export function buildConsoleText(document: LogDocument, layers?: Set<string>): string {
+  const steps = isTestLogDocument(document) ? document.steps : [document]
+  return steps
+    .flatMap((step) => flattenNodes(step.entries, step.step_id))
+    .filter(({ node }) => !layers || layers.has(node.layer))
+    .sort((a, b) => a.node.timestamp.localeCompare(b.node.timestamp))
+    .map(({ node, stepId }) => {
+      const source = `${node.component ?? 'test'}.${node.layer}`
+      const duration = node.duration_ms == null ? '' : ` ${node.duration_ms}ms`
+      return `${node.timestamp} ${source} ${node.level.toUpperCase()} [${stepId}] ${node.message}${duration}`
+    })
+    .join('\n')
+}
+
 export function collectLayers(nodes: LogNode[], into: Set<string> = new Set()): Set<string> {
   for (const node of nodes) {
     into.add(node.layer)
@@ -26,7 +47,7 @@ export function LogTreeNode({
   visibleLayers: Set<string>
 }) {
   if (!visibleLayers.has(node.layer)) return null
-  const key = `${depth}:${node.time}:${node.message}:${node.event ?? ''}`
+  const key = `${depth}:${node.timestamp}:${node.message}:${node.event ?? ''}`
   const hasChildren = (node.children?.length ?? 0) > 0
   const isCollapsed = collapsed.has(key)
   const visibleChildren = (node.children ?? []).filter((child) => {
@@ -46,7 +67,7 @@ export function LogTreeNode({
           <span className="log-toggle-spacer" />
         )}
         <span className={`log-layer chip-${node.layer}`}>{node.layer}</span>
-        <span className="log-time">{formatTime(node.time)}</span>
+        <span className="log-time">{formatTime(node.timestamp)}</span>
         <span className="log-message">{node.message}</span>
         {node.component ? <span className="muted log-meta">{node.component}</span> : null}
         {node.event ? <span className="muted log-meta">{node.event}</span> : null}
@@ -85,21 +106,31 @@ export function downloadLogJson(document: LogDocument, title: string) {
   URL.revokeObjectURL(url)
 }
 
+export function downloadConsoleText(document: LogDocument, title: string) {
+  const safe = title.replace(/[^\w.-]+/g, '_').slice(0, 80) || 'console'
+  const blob = new Blob([`${buildConsoleText(document)}\n`], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = window.document.createElement('a')
+  link.href = url
+  link.download = `${safe}.txt`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 export function StepLogViewer({
   title,
   document,
   error,
-  downloadUrl,
   onClose,
 }: {
   title: string
   document: LogDocument | null
   error: string | null
-  downloadUrl: string | null
   onClose: () => void
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [hiddenLayers, setHiddenLayers] = useState<Set<string>>(new Set())
+  const [view, setView] = useState<'console' | 'structured'>('console')
 
   const stepBlocks = document
     ? isTestLogDocument(document)
@@ -133,19 +164,8 @@ export function StepLogViewer({
   const subtitle = document
     ? isTestLogDocument(document)
       ? `Test ${document.test_id ?? '—'} · ${document.steps.length} step(s) (includes pass + fail)`
-      : `Step ${document.step} · ${document.status}`
+      : `Step ${document.step_id} · ${document.status}`
     : null
-
-  const onDownload = () => {
-    if (downloadUrl) {
-      const link = window.document.createElement('a')
-      link.href = downloadUrl
-      link.download = ''
-      link.click()
-      return
-    }
-    if (document) downloadLogJson(document, title)
-  }
 
   return (
     <div className="log-viewer">
@@ -158,10 +178,18 @@ export function StepLogViewer({
           <button
             type="button"
             className="ghost"
-            disabled={!document && !downloadUrl}
-            onClick={onDownload}
+            disabled={!document}
+            onClick={() => document && downloadConsoleText(document, title)}
           >
-            Download logs
+            Download TXT
+          </button>
+          <button
+            type="button"
+            className="ghost"
+            disabled={!document}
+            onClick={() => document && downloadLogJson(document, title)}
+          >
+            Download JSON
           </button>
           <button type="button" className="ghost" onClick={onClose}>
             Close
@@ -170,6 +198,12 @@ export function StepLogViewer({
       </div>
 
       <div className="log-filters" aria-label="Filter log layers">
+        <button type="button" className="ghost" onClick={() => setView('console')}>
+          Console
+        </button>
+        <button type="button" className="ghost" onClick={() => setView('structured')}>
+          Structured
+        </button>
         <span className="muted">Layers:</span>
         {availableLayers.map((layer) => {
           const on = !hiddenLayers.has(layer)
@@ -195,7 +229,7 @@ export function StepLogViewer({
             const keys = new Set<string>()
             const walk = (nodes: LogNode[], depth: number) => {
               for (const node of nodes) {
-                const key = `${depth}:${node.time}:${node.message}:${node.event ?? ''}`
+                const key = `${depth}:${node.timestamp}:${node.message}:${node.event ?? ''}`
                 if (node.children?.length) keys.add(key)
                 if (node.children) walk(node.children, depth + 1)
               }
@@ -210,15 +244,18 @@ export function StepLogViewer({
 
       {error ? <p className="error">{error}</p> : null}
       {!document && !error ? <p className="muted">Loading logs…</p> : null}
-      {document ? (
+      {document && view === 'console' ? (
+        <pre className="console-output">{buildConsoleText(document, visibleLayers) || 'No log entries.'}</pre>
+      ) : null}
+      {document && view === 'structured' ? (
         stepBlocks.length === 0 ? (
           <p className="muted tight">No log entries yet.</p>
         ) : (
           <div className="log-step-blocks">
             {stepBlocks.map((block) => (
-              <div key={`${block.step}-${block.status}`} className="log-step-block">
+              <div key={`${block.step_id}-${block.status}`} className="log-step-block">
                 <p className="tight">
-                  <strong>{block.step}</strong>{' '}
+                  <strong>{block.step_id}</strong>{' '}
                   <span className={`status status-${block.status === 'success' ? 'finished' : 'failed'}`}>
                     {block.status}
                   </span>
@@ -229,7 +266,7 @@ export function StepLogViewer({
                   <ul className="log-tree">
                     {block.entries.map((node, index) => (
                       <LogTreeNode
-                        key={`${block.step}-${index}`}
+                        key={`${block.step_id}-${index}`}
                         node={node}
                         depth={0}
                         collapsed={collapsed}

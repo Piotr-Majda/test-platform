@@ -16,9 +16,13 @@ from test_platform_contracts import (
     ExecuteTestCommand,
     FailureWhere,
     FlakinessSnapshot,
+    LOG_SCHEMA_VERSION,
     PluginManifest,
+    StepLogDocument,
     StepStatus,
+    StructuredLogEntry,
     TestDefinition,
+    TestLogDocument,
     TestRunEvent,
     TestRunEventType,
 )
@@ -49,6 +53,7 @@ def test_plugin_manifest_round_trips_json() -> None:
     # Then
     assert restored == manifest
     assert restored.model_dump(mode="json")["contracts_version"] == CONTRACTS_VERSION
+    assert restored.log_schema_version == LOG_SCHEMA_VERSION
 
 
 def test_plugin_manifest_rejects_empty_plugin_id() -> None:
@@ -119,6 +124,30 @@ def test_step_event_includes_duration_and_artifacts() -> None:
     payload = event.model_dump(mode="json")
     assert payload["duration_ms"] == 42
     assert payload["artifacts"][0]["kind"] == "html_snapshot"
+
+
+def test_structured_log_contract_round_trips_test_and_step_documents() -> None:
+    entry = StructuredLogEntry(
+        timestamp=datetime(2026, 7, 21, 12, 0, tzinfo=UTC),
+        layer="adapter",
+        component="playwright",
+        message="Clicked checkout button",
+        duration_ms=142,
+    )
+    step = StepLogDocument(
+        test_id="checkout",
+        step_id="submit_order",
+        status="success",
+        duration_ms=142,
+        entries=[entry],
+    )
+    document = TestLogDocument(test_id="checkout", steps=[step])
+
+    restored = TestLogDocument.model_validate_json(document.model_dump_json())
+
+    assert restored == document
+    assert restored.schema_version == LOG_SCHEMA_VERSION
+    assert restored.steps[0].entries[0].component == "playwright"
 
 
 def test_analysis_report_round_trips_json() -> None:

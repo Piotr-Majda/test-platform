@@ -133,16 +133,19 @@ class HtmlSnapshotArtifactStrategy:
         step_log: dict[str, Any],
     ) -> list[ArtifactRef]:
         artifacts: list[ArtifactRef] = []
+        test_id = context.log.test_id
+        step_log_path = (
+            f"{test_id}/{step_id}/step.log.json" if test_id else f"{step_id}/step.log.json"
+        )
         # Pass and fail — needed to audit false positives / positive execution trail
         artifacts.append(
             self._store.write_text(
-                f"{step_id}/step.log.json",
+                step_log_path,
                 json.dumps(step_log, separators=(",", ":")),
                 "application/json",
             )
         )
         # Per-test aggregated log (avoids multi-test scenarios overwriting each other)
-        test_id = context.log.test_id
         test_log_path = f"{test_id}/test.log.json" if test_id else "test.log.json"
         artifacts.append(
             self._store.write_text(
@@ -155,7 +158,6 @@ class HtmlSnapshotArtifactStrategy:
         if failed:
             html = context.data.get("page_html")
             if isinstance(html, str) and html:
-                artifacts.append(
-                    self._store.write_text(f"{step_id}/page.html", html, "text/html")
-                )
+                html_path = f"{test_id}/{step_id}/page.html" if test_id else f"{step_id}/page.html"
+                artifacts.append(self._store.write_text(html_path, html, "text/html"))
         return artifacts

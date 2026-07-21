@@ -1,5 +1,6 @@
 from test_platform_contracts.models import (
     CONTRACTS_VERSION,
+    LOG_SCHEMA_VERSION,
     AnalysisReport,
     AnalysisRequest,
     AnalysisScope,
@@ -14,9 +15,12 @@ from test_platform_contracts.models import (
     HistoryConfig,
     PluginManifest,
     Scenario,
+    StepLogDocument,
     StepStatus,
+    StructuredLogEntry,
     TestAnalysisRef,
     TestDefinition,
+    TestLogDocument,
     TestRunEvent,
     TestRunEventType,
 )
@@ -30,6 +34,7 @@ from test_platform_contracts.streams import (
 
 __all__ = [
     "CONTRACTS_VERSION",
+    "LOG_SCHEMA_VERSION",
     "AnalysisReport",
     "AnalysisRequest",
     "AnalysisScope",
@@ -47,9 +52,12 @@ __all__ = [
     "HistoryConfig",
     "PluginManifest",
     "Scenario",
+    "StepLogDocument",
     "StepStatus",
+    "StructuredLogEntry",
     "TestAnalysisRef",
     "TestDefinition",
+    "TestLogDocument",
     "TestRunEvent",
     "TestRunEventType",
     "decode_stream_payload",

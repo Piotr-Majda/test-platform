@@ -3,8 +3,8 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import {
   analysisExportUrl,
   artifactUrl,
-  fetchLogDocument,
-  fetchTestLogForRun,
+  fetchStepLogs,
+  fetchTestLogs,
   getAnalysis,
   getRun,
   listScenarios,
@@ -14,11 +14,9 @@ import {
   tryGetTestAnalysis,
   cacheRunAnalysis,
   type AnalysisReport,
-  type ArtifactRef,
   type LogDocument,
   type RunDetail,
   type Scenario,
-  type StepView,
 } from '../api'
 import { AnalysisPanel } from '../components/AnalysisPanel'
 import { AnalysisSpinner, IconAnalyzed, IconNotAnalyzed } from '../components/AnalysisStateIcon'
@@ -54,7 +52,6 @@ export function TestDetailPage() {
   const [logTitle, setLogTitle] = useState('')
   const [logDocument, setLogDocument] = useState<LogDocument | null>(null)
   const [logError, setLogError] = useState<string | null>(null)
-  const [logDownloadUrl, setLogDownloadUrl] = useState<string | null>(null)
   const logViewRef = useRef<HTMLElement | null>(null)
 
   const load = useCallback(async () => {
@@ -128,41 +125,32 @@ export function TestDetailPage() {
     }
   }
 
-  const openLogPath = async (title: string, relativePath: string) => {
+  const prepareConsole = (title: string) => {
     setLogOpen(true)
     setLogTitle(title)
     setLogDocument(null)
     setLogError(null)
-    setLogDownloadUrl(artifactUrl(relativePath))
     window.requestAnimationFrame(() => {
       logViewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
+  }
+
+  const openStepConsole = async (stepId: string) => {
+    prepareConsole(`Step ${stepId} · console`)
     try {
-      setLogDocument(await fetchLogDocument(relativePath))
+      setLogDocument(await fetchStepLogs(runId, testId, stepId))
     } catch (err) {
-      setLogError(err instanceof Error ? err.message : 'Failed to load log')
+      setLogError(err instanceof Error ? err.message : 'Failed to load step console')
     }
   }
 
-  const openStepLog = (stepName: string, artifact: ArtifactRef) => {
-    void openLogPath(`${stepName} · ${artifact.name}`, artifact.relative_path)
-  }
-
-  const openTestLog = (steps: StepView[]) => {
-    setLogOpen(true)
-    setLogTitle(`Test ${testId} · logs`)
-    setLogDocument(null)
-    setLogError(null)
-    setLogDownloadUrl(null)
-    window.requestAnimationFrame(() => {
-      logViewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-    void fetchTestLogForRun(runId, testId, steps)
-      .then(({ document, downloadUrl }) => {
-        setLogDocument(document)
-        setLogDownloadUrl(downloadUrl)
-      })
-      .catch((err) => setLogError(err instanceof Error ? err.message : 'Failed to load log'))
+  const openTestConsole = async () => {
+    prepareConsole(`Test ${testId} · console`)
+    try {
+      setLogDocument(await fetchTestLogs(runId, testId))
+    } catch (err) {
+      setLogError(err instanceof Error ? err.message : 'Failed to load test console')
+    }
   }
 
   if (!scenario && !error) {
@@ -279,11 +267,11 @@ export function TestDetailPage() {
             disabled={busy}
             onClick={() => {
               setBusy(true)
-              openTestLog(group?.steps ?? [])
+              void openTestConsole()
               setBusy(false)
             }}
           >
-            Open test logs
+            Test console
           </button>
         </div>
         <RunMetaLine
@@ -303,17 +291,12 @@ export function TestDetailPage() {
                 <th>Status</th>
                 <th>Time</th>
                 <th>Error</th>
-                <th>Logs</th>
+                <th>Console</th>
                 <th>Artifacts</th>
               </tr>
             </thead>
             <tbody>
               {group.steps.map((step, index) => {
-                const logArts = step.artifacts.filter(
-                  (a) =>
-                    a.name !== 'test.log.json' &&
-                    (a.kind === 'log' || a.name.endsWith('.log.json') || a.name.includes('log.json')),
-                )
                 const otherArts = step.artifacts.filter(
                   (a) =>
                     a.name !== 'test.log.json' &&
@@ -328,18 +311,13 @@ export function TestDetailPage() {
                     <td>{formatMs(step.duration_ms)}</td>
                     <td className="col-error">{step.error_message || '—'}</td>
                     <td className="col-artifacts">
-                      {logArts.length === 0
-                        ? '—'
-                        : logArts.map((artifact) => (
-                            <button
-                              key={artifact.id}
-                              type="button"
-                              className="ghost artifact-open"
-                              onClick={() => openStepLog(step.name, artifact)}
-                            >
-                              {artifact.name}
-                            </button>
-                          ))}
+                      <button
+                        type="button"
+                        className="ghost artifact-open"
+                        onClick={() => void openStepConsole(step.name)}
+                      >
+                        Console
+                      </button>
                     </td>
                     <td className="col-artifacts">
                       {otherArts.length === 0
@@ -398,7 +376,6 @@ export function TestDetailPage() {
             title={logTitle}
             document={logDocument}
             error={logError}
-            downloadUrl={logDownloadUrl}
             onClose={() => setLogOpen(false)}
           />
         </section>

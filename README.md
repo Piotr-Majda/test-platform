@@ -177,7 +177,14 @@ remains active for development and Docker Compose.
 
 The credentials in `docker-compose.yml` are development-only defaults. Never reuse them in Railway or another public environment.
 
-Contracts version must match between API and executor (`CONTRACTS_VERSION`, currently **0.8.0**). Restart both after upgrading contracts.
+Contracts version must match between API and executor (`CONTRACTS_VERSION`, currently **0.8.0**). Structured plugin logs additionally declare `LOG_SCHEMA_VERSION` (currently **1.0**) in the plugin manifest. Restart API and executor after upgrading either contract.
+
+Structured logs are stored as canonical JSON artifacts, never in a framework-specific shape. Plugins map pytest, Playwright, API-client, or integration-runner output to `StructuredLogEntry` before storage. The dashboard requests logs only through semantic API routes:
+
+- `GET /runs/{run_id}/tests/{test_id}/logs`
+- `GET /runs/{run_id}/tests/{test_id}/steps/{step_id}/logs`
+
+The API owns artifact lookup, authorization, schema validation, and legacy-log adaptation. The web app owns presentation: human-readable Console lines, structured-tree inspection, and derived TXT/JSON downloads. TXT is generated on demand and is not duplicated in artifact storage.
 
 ## Slice status
 

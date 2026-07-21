@@ -47,7 +47,7 @@ def step(name: str) -> Callable[[type[T]], type[T]]:
                 # SUT action time only — excludes log finalize, artifact I/O, and emit
                 duration_ms = context.consume_action_ms()
                 record_action_ms(duration_ms)
-                step_log = context.log.finish_step(failed=failed)
+                step_log = context.log.finish_step(failed=failed, duration_ms=duration_ms)
                 artifacts = strategy.collect(
                     context,
                     name,

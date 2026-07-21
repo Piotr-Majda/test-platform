@@ -495,23 +495,31 @@ export function artifactUrl(relativePath: string): string {
 }
 
 export type LogNode = {
+  timestamp: string
   layer: string
-  time: string
   message: string
   component?: string
+  level: string
+  duration_ms?: number | null
   event?: string
   data?: Record<string, unknown>
   children?: LogNode[]
 }
 
 export type StepLogDocument = {
-  step: string
+  schema_version: string
+  scope: 'step'
+  test_id: string | null
+  step_id: string
   status: string
+  duration_ms?: number | null
   entries: LogNode[]
 }
 
 export type TestLogDocument = {
-  test_id: string | null
+  schema_version: string
+  scope: 'test'
+  test_id: string
   steps: StepLogDocument[]
 }
 
@@ -521,90 +529,18 @@ export function isTestLogDocument(doc: LogDocument): doc is TestLogDocument {
   return Array.isArray((doc as TestLogDocument).steps)
 }
 
-export async function fetchLogDocument(relativePath: string): Promise<LogDocument> {
-  const url = artifactUrl(relativePath)
-  let response: Response
-  try {
-    response = await fetch(url, { headers: { Accept: 'application/json' } })
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : 'network error'
-    throw new Error(`Failed to fetch log from ${url}: ${reason}`)
-  }
-  if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    throw new Error(`Failed to load log (${response.status}) ${text}`.trim())
-  }
-  return response.json() as Promise<LogDocument>
+export function fetchTestLogs(runId: string, testId: string): Promise<TestLogDocument> {
+  return request<TestLogDocument>(
+    `/runs/${encodeURIComponent(runId)}/tests/${encodeURIComponent(testId)}/logs`,
+  )
 }
 
-/** Aggregated pass+fail trail for one test inside a run. */
-export function testLogRelativePath(runId: string, testId?: string | null): string {
-  if (testId) {
-    return `${runId}/${testId}/test.log.json`
-  }
-  return `${runId}/test.log.json`
-}
-
-async function tryFetchLog(relativePath: string): Promise<LogDocument | null> {
-  try {
-    return await fetchLogDocument(relativePath)
-  } catch {
-    return null
-  }
-}
-
-/**
- * Resolve a test's log: per-test file → legacy shared file (if matching) →
- * rebuild from that test's step.log.json artifacts (works for older runs).
- */
-export async function fetchTestLogForRun(
+export function fetchStepLogs(
   runId: string,
-  testId: string | null | undefined,
-  steps: StepView[],
-): Promise<{ document: LogDocument; downloadUrl: string | null }> {
-  const perTestPath = testLogRelativePath(runId, testId)
-  const perTest = await tryFetchLog(perTestPath)
-  if (perTest) {
-    return { document: perTest, downloadUrl: artifactUrl(perTestPath) }
-  }
-
-  if (testId) {
-    const legacyPath = testLogRelativePath(runId)
-    const legacy = await tryFetchLog(legacyPath)
-    if (legacy && isTestLogDocument(legacy) && legacy.test_id === testId) {
-      return { document: legacy, downloadUrl: artifactUrl(legacyPath) }
-    }
-  } else {
-    const legacyPath = testLogRelativePath(runId)
-    const legacy = await tryFetchLog(legacyPath)
-    if (legacy) {
-      return { document: legacy, downloadUrl: artifactUrl(legacyPath) }
-    }
-  }
-
-  const testSteps = steps.filter((step) => (testId ? step.test_id === testId : true))
-  const stepDocs: StepLogDocument[] = []
-  for (const step of testSteps) {
-    const logArt = step.artifacts.find(
-      (a) => a.name === 'step.log.json' || a.relative_path.endsWith('/step.log.json'),
-    )
-    if (!logArt) continue
-    const doc = await tryFetchLog(logArt.relative_path)
-    if (doc && !isTestLogDocument(doc)) {
-      stepDocs.push(doc)
-    }
-  }
-
-  if (stepDocs.length === 0) {
-    throw new Error(
-      testId
-        ? `No logs found for test ${testId} in this run. Re-run after restarting the executor to write per-test logs.`
-        : `No logs found for run ${runId}`,
-    )
-  }
-
-  return {
-    document: { test_id: testId ?? null, steps: stepDocs },
-    downloadUrl: null,
-  }
+  testId: string,
+  stepId: string,
+): Promise<StepLogDocument> {
+  return request<StepLogDocument>(
+    `/runs/${encodeURIComponent(runId)}/tests/${encodeURIComponent(testId)}/steps/${encodeURIComponent(stepId)}/logs`,
+  )
 }

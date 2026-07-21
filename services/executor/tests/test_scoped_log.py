@@ -21,7 +21,8 @@ def test_domain_adapter_framework_nesting() -> None:
 
     document = log.finish_step(failed=False)
 
-    assert document["step"] == "open_page"
+    assert document["schema_version"] == "1.0"
+    assert document["step_id"] == "open_page"
     domain = document["entries"][0]
     assert domain["layer"] == "domain"
     adapter = domain["children"][0]
@@ -30,6 +31,7 @@ def test_domain_adapter_framework_nesting() -> None:
     framework = adapter["children"][0]
     assert framework["layer"] == "framework"
     assert "httpx" in framework["message"]
+    assert domain["duration_ms"] >= 0
 
 
 def test_test_document_aggregates_steps() -> None:
@@ -44,4 +46,5 @@ def test_test_document_aggregates_steps() -> None:
     test_doc = log.test_document()
 
     assert test_doc["test_id"] == "google_title"
-    assert [step["step"] for step in test_doc["steps"]] == ["open_page", "assert_title"]
+    assert test_doc["schema_version"] == "1.0"
+    assert [step["step_id"] for step in test_doc["steps"]] == ["open_page", "assert_title"]

@@ -1,9 +1,11 @@
 from datetime import datetime
 from enum import StrEnum
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 CONTRACTS_VERSION = "0.8.0"
+LOG_SCHEMA_VERSION = "1.0"
 
 
 class StepStatus(StrEnum):
@@ -44,6 +46,39 @@ class ArtifactRef(BaseModel):
     relative_path: str = Field(min_length=1)
 
 
+class StructuredLogEntry(BaseModel):
+    """Framework-neutral log entry produced by plugins and rendered by the platform."""
+
+    timestamp: datetime
+    layer: str = Field(min_length=1)
+    message: str = Field(min_length=1)
+    component: str | None = None
+    level: str = "info"
+    duration_ms: int | None = Field(default=None, ge=0)
+    event: str | None = None
+    data: dict[str, Any] = Field(default_factory=dict)
+    children: list["StructuredLogEntry"] = Field(default_factory=list)
+
+
+class StepLogDocument(BaseModel):
+    schema_version: str = LOG_SCHEMA_VERSION
+    scope: Literal["step"] = "step"
+    test_id: str | None = None
+    step_id: str = Field(min_length=1)
+    status: str
+    duration_ms: int | None = Field(default=None, ge=0)
+    entries: list[StructuredLogEntry] = Field(default_factory=list)
+
+
+class TestLogDocument(BaseModel):
+    __test__ = False
+
+    schema_version: str = LOG_SCHEMA_VERSION
+    scope: Literal["test"] = "test"
+    test_id: str = Field(min_length=1)
+    steps: list[StepLogDocument] = Field(default_factory=list)
+
+
 class TestDefinition(BaseModel):
     __test__ = False
 
@@ -59,6 +94,7 @@ class PluginManifest(BaseModel):
     plugin_id: str = Field(min_length=1)
     framework_version: str = Field(min_length=1)
     contracts_version: str = CONTRACTS_VERSION
+    log_schema_version: str = LOG_SCHEMA_VERSION
     tests: list[TestDefinition] = Field(default_factory=list)
 
 

@@ -6,7 +6,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 import httpx
 import redis
-from test_platform_contracts import CONTRACTS_VERSION, PluginManifest
+from test_platform_contracts import CONTRACTS_VERSION, LOG_SCHEMA_VERSION, PluginManifest
 
 from test_platform_executor.events import RedisProgressPublisher
 from test_platform_executor.framework.catalog import catalog_definitions
@@ -29,6 +29,7 @@ def register_catalog(api_url: str, plugin_id: str) -> None:
         plugin_id=plugin_id,
         framework_version=framework_version(),
         contracts_version=CONTRACTS_VERSION,
+        log_schema_version=LOG_SCHEMA_VERSION,
         tests=catalog_definitions(),
     )
     url = f"{api_url.rstrip('/')}/plugins/manifest"
