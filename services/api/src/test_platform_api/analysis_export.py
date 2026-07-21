@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from io import BytesIO
-from pathlib import Path
 import zipfile
 
 from test_platform_contracts import AnalysisReport, ErrorAnalysisItem
 
-from test_platform_api.paths import artifacts_dir
+from test_platform_api.artifact_storage import artifact_storage
 
 
 def report_to_markdown(report: AnalysisReport) -> str:
@@ -95,7 +94,7 @@ def _error_md(index: int, err: ErrorAnalysisItem) -> list[str]:
 
 def build_analysis_export_zip(report: AnalysisReport) -> bytes:
     buffer = BytesIO()
-    root = artifacts_dir()
+    storage = artifact_storage()
     run_ids = {e.last_failure_run_id for e in report.errors if e.last_failure_run_id}
     if report.run_id:
         run_ids.add(report.run_id)
@@ -104,11 +103,8 @@ def build_analysis_export_zip(report: AnalysisReport) -> bytes:
         zf.writestr("report.md", report_to_markdown(report))
         zf.writestr("report.json", report.model_dump_json(indent=2))
         for run_id in sorted(run_ids):
-            run_dir = root / run_id
-            if not run_dir.is_dir():
-                continue
-            for path in run_dir.rglob("*"):
-                if path.is_file():
-                    arc = Path("artifacts") / run_id / path.relative_to(run_dir)
-                    zf.write(path, arcname=str(arc).replace("\\", "/"))
+            for key in storage.list_keys(run_id):
+                payload = storage.read_bytes(key)
+                if payload is not None:
+                    zf.writestr(f"artifacts/{key}", payload)
     return buffer.getvalue()

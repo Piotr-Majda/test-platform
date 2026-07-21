@@ -149,8 +149,19 @@ cd services/executor && uv run pytest
 | `OPENAI_API_KEY` | *(unset → heuristic analysis)* | API AI analyzer |
 | `ANALYSIS_MODE` | *(auto)* | set `heuristic` to force non-LLM analysis |
 | `ARTIFACTS_DIR` | `<repo>/artifacts` | API + executor |
+| `S3_BUCKET` | *(unset → local artifacts)* | API + executor |
+| `S3_ENDPOINT_URL` | *(required with `S3_BUCKET`)* | API + executor |
+| `S3_ACCESS_KEY_ID` | *(required with `S3_BUCKET`)* | API + executor |
+| `S3_SECRET_ACCESS_KEY` | *(required with `S3_BUCKET`)* | API + executor |
+| `S3_REGION` | `auto` | API + executor |
+| `AWS_ENDPOINT_URL`, `AWS_S3_BUCKET_NAME`, `AWS_DEFAULT_REGION` | Railway Bucket aliases | API + executor |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Railway Bucket credentials | API + executor |
 
-Contracts version must match between API and executor (`CONTRACTS_VERSION`, currently **0.7.1**). Restart both after upgrading contracts.
+When either the `S3_*` variables or Railway's generic `AWS_*` variables are present, artifacts
+are stored in an S3-compatible bucket. Without a bucket variable, local filesystem storage
+remains active for development and Docker Compose.
+
+Contracts version must match between API and executor (`CONTRACTS_VERSION`, currently **0.8.0**). Restart both after upgrading contracts.
 
 ## Slice status
 

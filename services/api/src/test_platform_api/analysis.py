@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
 from statistics import median
 from typing import Protocol
 import uuid
@@ -33,7 +32,7 @@ from test_platform_api.history import (
     reliability_label,
     test_outcome_from_events,
 )
-from test_platform_api.paths import artifacts_dir
+from test_platform_api.artifact_storage import artifact_storage
 
 LOG_BASELINE_N = 5
 LOG_SIZE_RATIO_HIGH = 3.0
@@ -138,15 +137,14 @@ def _load_run_step_meta(
     return path, details
 
 
-def _test_log_path(run_id: str, test_id: str) -> Path:
-    return artifacts_dir() / run_id / test_id / "test.log.json"
+def _test_log_key(run_id: str, test_id: str) -> str:
+    return f"{run_id}/{test_id}/test.log.json"
 
 
 def _read_log_excerpt(run_id: str, test_id: str) -> tuple[int | None, str]:
-    path = _test_log_path(run_id, test_id)
-    if not path.is_file():
+    raw = artifact_storage().read_bytes(_test_log_key(run_id, test_id))
+    if raw is None:
         return None, ""
-    raw = path.read_bytes()
     text = raw.decode("utf-8", errors="replace")
     if len(text) > LOG_TAIL_CHARS:
         text = "…\n" + text[-LOG_TAIL_CHARS:]
@@ -171,9 +169,9 @@ def _baseline_log_sizes(
         status, _ = test_outcome_from_events(events, test_id)
         if status != "finished":
             continue
-        path = _test_log_path(run.id, test_id)
-        if path.is_file():
-            sizes.append(path.stat().st_size)
+        size = artifact_storage().size(_test_log_key(run.id, test_id))
+        if size is not None:
+            sizes.append(size)
         if len(sizes) >= n:
             break
     return sizes

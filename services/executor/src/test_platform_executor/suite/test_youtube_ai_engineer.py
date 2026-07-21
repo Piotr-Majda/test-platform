@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from test_platform_executor.framework.artifacts import HtmlSnapshotArtifactStrategy, LocalArtifactStore
+from test_platform_executor.framework.artifacts import HtmlSnapshotArtifactStrategy, create_artifact_store
 from test_platform_executor.framework.context import StepContext
 from test_platform_executor.framework.emission import get_run_id, get_test_id
 from test_platform_executor.framework.scoped_log import ScopedLogger
@@ -46,7 +46,7 @@ def _client():
 
 @pytest.mark.platform_test("youtube_ai_engineer_latest")
 def test_youtube_ai_engineer_latest(platform_emitter) -> None:
-    store = LocalArtifactStore(artifacts_dir(), get_run_id())
+    store = create_artifact_store(artifacts_dir(), get_run_id())
     strategy = HtmlSnapshotArtifactStrategy(store)
     client = _client()
     context = StepContext(log=ScopedLogger(test_id=get_test_id()))

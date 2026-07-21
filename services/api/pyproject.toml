@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Test Platform API — orchestrates scenarios, runs, and events"
 requires-python = ">=3.12"
 dependencies = [
+    "boto3>=1.35",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "sqlalchemy>=2.0",

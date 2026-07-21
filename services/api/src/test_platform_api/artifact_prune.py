@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-import shutil
 
+from test_platform_api.artifact_storage import artifact_storage
 from test_platform_api.db import RunRow, SqlAlchemyRepository
-from test_platform_api.paths import artifacts_dir
 
 
 def prune_scenario_artifacts(
@@ -35,18 +34,12 @@ def prune_scenario_artifacts(
         history_max_days=history_max_days,
         now=now,
     )
-    root = artifacts_dir()
+    storage = artifact_storage()
     deleted = 0
     for run in runs:
         if run.id in keep_ids:
             continue
-        run_dir = root / run.id
-        if run_dir.is_dir():
-            shutil.rmtree(run_dir, ignore_errors=True)
-            deleted += 1
-        elif run_dir.is_file():
-            run_dir.unlink(missing_ok=True)
-            deleted += 1
+        deleted += storage.delete_prefix(run.id)
     return deleted
 
 

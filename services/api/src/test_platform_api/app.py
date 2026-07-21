@@ -4,7 +4,7 @@ from datetime import datetime
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, sessionmaker
 from test_platform_contracts import (
@@ -25,6 +25,7 @@ from test_platform_api.analysis import FailureAnalyzer
 from test_platform_api.analysis_export import build_analysis_export_zip
 from test_platform_api.analysis_jobs import AnalysisJobStatus, AnalysisJobStore, start_analysis_job
 from test_platform_api.artifact_prune import prune_scenario_artifacts
+from test_platform_api.artifact_storage import artifact_storage
 from test_platform_api.db import ScenarioRow, SqlAlchemyRepository
 from test_platform_api.event_ingest import apply_event
 from test_platform_api.history import (
@@ -35,7 +36,6 @@ from test_platform_api.history import (
     scenario_duration_from_events,
     test_outcome_from_events,
 )
-from test_platform_api.paths import artifacts_dir
 from test_platform_api.ports import EventPublisher
 from test_platform_api.projections import RunProjection, project_run
 
@@ -689,29 +689,27 @@ def create_app(
 
     @app.get("/artifacts/{relative_path:path}")
     def get_artifact(relative_path: str) -> Response:
-        root = artifacts_dir()
-        candidate = (root / relative_path).resolve()
         try:
-            candidate.relative_to(root)
+            payload = artifact_storage().read_bytes(relative_path)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="invalid artifact path") from exc
-        if not candidate.is_file():
+        if payload is None:
             raise HTTPException(
                 status_code=404,
-                detail=f"artifact not found under {root}: {relative_path}",
+                detail=f"artifact not found: {relative_path}",
             )
         # JSON logs: return inline JSON (fetch-friendly). Other files: downloadable.
-        if candidate.suffix.lower() == ".json":
+        if relative_path.lower().endswith(".json"):
             return Response(
-                content=candidate.read_bytes(),
+                content=payload,
                 media_type="application/json",
                 headers={"Cache-Control": "no-store"},
             )
-        return FileResponse(
-            candidate,
-            filename=candidate.name,
+        filename = relative_path.replace("\\", "/").rsplit("/", 1)[-1]
+        return Response(
+            content=payload,
             media_type="application/octet-stream",
-            content_disposition_type="attachment",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
     return app
