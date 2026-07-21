@@ -1,0 +1,83 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: platform
+      POSTGRES_DB: platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - platform-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform -d platform"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+psycopg://platform:platform@postgres:5432/platform
+      ARTIFACTS_DIR: /data/artifacts
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANALYSIS_MODE: ${ANALYSIS_MODE:-}
+    volumes:
+      - platform-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/docs', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+  executor:
+    build:
+      context: .
+      dockerfile: services/executor/Dockerfile
+    environment:
+      API_URL: http://api:8001
+      REDIS_URL: redis://redis:6379/0
+      ARTIFACTS_DIR: /data/artifacts
+      WORKER_COUNT: ${WORKER_COUNT:-2}
+    volumes:
+      - platform-data:/data
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  platform-data:
+  platform-pg:

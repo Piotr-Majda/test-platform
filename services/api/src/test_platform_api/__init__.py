@@ -1,0 +1,1 @@
+"""Test Platform API service."""
