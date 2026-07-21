@@ -2,9 +2,9 @@ import uuid
 from collections.abc import Generator
 from datetime import datetime
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, sessionmaker
 from test_platform_contracts import (
@@ -26,6 +26,13 @@ from test_platform_api.analysis_export import build_analysis_export_zip
 from test_platform_api.analysis_jobs import AnalysisJobStatus, AnalysisJobStore, start_analysis_job
 from test_platform_api.artifact_prune import prune_scenario_artifacts
 from test_platform_api.artifact_storage import artifact_storage
+from test_platform_api.auth import (
+    SESSION_COOKIE,
+    AuthConfig,
+    AuthManager,
+    AuthUser,
+    LoginRequest,
+)
 from test_platform_api.db import ScenarioRow, SqlAlchemyRepository
 from test_platform_api.event_ingest import apply_event
 from test_platform_api.history import (
@@ -184,6 +191,7 @@ def create_app(
     session_factory: sessionmaker[Session],
     publisher: EventPublisher,
     analyzer: FailureAnalyzer | None = None,
+    auth_config: AuthConfig | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="Test Platform API",
@@ -203,6 +211,38 @@ def create_app(
     app.state.publisher = publisher
     app.state.analyzer = analyzer or default_analyzer()
     app.state.analysis_jobs = AnalysisJobStore()
+    app.state.auth = AuthManager(auth_config or AuthConfig.disabled())
+
+    @app.middleware("http")
+    async def authorize_request(request: Request, call_next):
+        auth: AuthManager = app.state.auth
+        if not auth.config.enabled:
+            return await call_next(request)
+
+        path = request.url.path
+        if request.method == "OPTIONS" or path in {"/health", "/auth/login", "/auth/logout"}:
+            return await call_next(request)
+
+        # These callbacks are reachable only through Railway's private network;
+        # nginx explicitly blocks them on the public web service.
+        is_executor_callback = path == "/plugins/manifest" or (
+            path.startswith("/runs/") and path.endswith("/events")
+        )
+        if is_executor_callback:
+            return await call_next(request)
+
+        user = auth.read_session(request.cookies.get(SESSION_COOKIE))
+        if user is None:
+            return JSONResponse({"detail": "Authentication required"}, status_code=401)
+        request.state.user = user
+
+        admin_only = (
+            (request.method == "POST" and path == "/scenarios")
+            or (request.method in {"PATCH", "DELETE"} and path.startswith("/scenarios/"))
+        )
+        if admin_only and user.role != "admin":
+            return JSONResponse({"detail": "Admin role required"}, status_code=403)
+        return await call_next(request)
 
     def get_repo() -> Generator[SqlAlchemyRepository, None, None]:
         session = app.state.session_factory()
@@ -218,6 +258,31 @@ def create_app(
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.post("/auth/login", response_model=AuthUser)
+    def login(body: LoginRequest, response: Response) -> AuthUser:
+        auth: AuthManager = app.state.auth
+        user = auth.authenticate(body.username, body.password)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        response.set_cookie(
+            SESSION_COOKIE,
+            auth.create_session(user),
+            max_age=auth.config.session_ttl_seconds,
+            httponly=True,
+            secure=auth.config.secure_cookie,
+            samesite="lax",
+            path="/",
+        )
+        return user
+
+    @app.post("/auth/logout", status_code=204)
+    def logout(response: Response) -> None:
+        response.delete_cookie(SESSION_COOKIE, path="/")
+
+    @app.get("/auth/me", response_model=AuthUser)
+    def current_user(request: Request) -> AuthUser:
+        return request.state.user
 
     @app.post("/plugins/manifest", status_code=204)
     def register_plugin_manifest(

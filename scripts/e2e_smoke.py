@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import sys
 import time
+import os
 
 import httpx
 
-API = "http://localhost:8001"
+API = os.getenv("API_URL", "http://localhost:8001")
 
 
 def main() -> int:
     client = httpx.Client(base_url=API, timeout=30.0)
     client.get("/health").raise_for_status()
+    client.post(
+        "/auth/login",
+        json={
+            "username": os.getenv("AUTH_ADMIN_USERNAME", "admin"),
+            "password": os.getenv("AUTH_ADMIN_PASSWORD", "admin-demo"),
+        },
+    ).raise_for_status()
 
     tests = client.get("/tests").json()
     if not tests:

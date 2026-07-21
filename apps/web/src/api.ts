@@ -167,17 +167,49 @@ export type ScenarioHistory = {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
+    credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
   })
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(text || `HTTP ${response.status}`)
+    if (response.status === 401 && path !== '/auth/login') {
+      window.dispatchEvent(new Event('tp:unauthorized'))
+    }
+    try {
+      const payload = JSON.parse(text) as { detail?: string }
+      throw new Error(payload.detail || `HTTP ${response.status}`)
+    } catch (error) {
+      if (error instanceof SyntaxError) throw new Error(text || `HTTP ${response.status}`)
+      throw error
+    }
   }
   if (response.status === 204) {
     return undefined as T
   }
   return response.json() as Promise<T>
+}
+
+export type AuthRole = 'admin' | 'viewer'
+
+export type AuthUser = {
+  username: string
+  role: AuthRole
+}
+
+export function login(username: string, password: string): Promise<AuthUser> {
+  return request<AuthUser>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
+}
+
+export function logout(): Promise<void> {
+  return request<void>('/auth/logout', { method: 'POST' })
+}
+
+export function getCurrentUser(): Promise<AuthUser> {
+  return request<AuthUser>('/auth/me')
 }
 
 export function listTests(): Promise<TestDefinition[]> {

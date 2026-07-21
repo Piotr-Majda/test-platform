@@ -32,6 +32,10 @@ services:
       ARTIFACTS_DIR: /data/artifacts
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANALYSIS_MODE: ${ANALYSIS_MODE:-}
+      AUTH_ADMIN_PASSWORD: ${AUTH_ADMIN_PASSWORD:-admin-demo}
+      AUTH_VIEWER_PASSWORD: ${AUTH_VIEWER_PASSWORD:-viewer-demo}
+      AUTH_SECRET: ${AUTH_SECRET:-local-development-secret-change-me}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
     volumes:
       - platform-data:/data
     depends_on:

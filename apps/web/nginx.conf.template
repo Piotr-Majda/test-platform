@@ -15,6 +15,16 @@ server {
         return 200 "ok\n";
     }
 
+    # Executor callbacks are private service-to-service APIs. Never expose them
+    # through the public web gateway, even though the API itself is private.
+    location = /api/plugins/manifest {
+        return 404;
+    }
+
+    location ~ ^/api/runs/[^/]+/events$ {
+        return 404;
+    }
+
     location /api/ {
         # proxy_pass with a variable does not apply nginx's usual trailing-slash
         # URI replacement, so strip the public gateway prefix explicitly.

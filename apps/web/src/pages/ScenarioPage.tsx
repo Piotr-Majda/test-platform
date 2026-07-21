@@ -28,8 +28,10 @@ import { StepLogViewer } from '../components/StepLogViewer'
 import { formatDateTime, formatMs, groupStepsByTest } from '../lib/format'
 import { PageSubHeader } from '../layout/PageSubHeader'
 import { useNavStack } from '../navigation/NavStack'
+import { useAuth } from '../auth/AuthContext'
 
 export function ScenarioPage() {
+  const { isAdmin } = useAuth()
   const { scenarioId = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const { go, back } = useNavStack()
@@ -366,7 +368,13 @@ export function ScenarioPage() {
             <button type="button" className="ghost" onClick={() => go(`/scenarios/${scenario.id}/history`)}>
               History
             </button>
-            <button type="button" className="ghost" onClick={() => go(`/scenarios/${scenario.id}/configure`)}>
+            <button
+              type="button"
+              className="ghost"
+              disabled={!isAdmin}
+              title={isAdmin ? undefined : 'Admin role required'}
+              onClick={() => go(`/scenarios/${scenario.id}/configure`)}
+            >
               Configure
             </button>
             <button

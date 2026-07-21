@@ -10,6 +10,7 @@ import {
 import { formatDateTime, formatMs } from '../lib/format'
 import { PageSubHeader } from '../layout/PageSubHeader'
 import { useNavStack } from '../navigation/NavStack'
+import { useAuth } from '../auth/AuthContext'
 
 type Row = {
   scenario: Scenario
@@ -20,6 +21,7 @@ type Row = {
 }
 
 export function ScenariosPage() {
+  const { isAdmin } = useAuth()
   const { go } = useNavStack()
   const [rows, setRows] = useState<Row[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -200,7 +202,8 @@ export function ScenariosPage() {
             <button
               type="button"
               className="ghost"
-              disabled={actionsDisabled}
+              disabled={actionsDisabled || !isAdmin}
+              title={isAdmin ? undefined : 'Admin role required'}
               onClick={() => go('/scenarios/new')}
             >
               New scenario
@@ -219,9 +222,11 @@ export function ScenariosPage() {
       {rows.length === 0 ? (
         <section className="panel">
           <p className="muted">No scenarios yet. Create one to get started.</p>
-          <button type="button" className="primary" onClick={() => go('/scenarios/new')}>
-            New scenario
-          </button>
+          {isAdmin ? (
+            <button type="button" className="primary" onClick={() => go('/scenarios/new')}>
+              New scenario
+            </button>
+          ) : null}
         </section>
       ) : (
         <ul className="scenario-list landing-list">
@@ -287,7 +292,8 @@ export function ScenariosPage() {
                 <button
                   type="button"
                   className="ghost"
-                  disabled={actionsDisabled}
+                  disabled={actionsDisabled || !isAdmin}
+                  title={isAdmin ? undefined : 'Admin role required'}
                   onClick={() => go(`/scenarios/${scenario.id}/configure`)}
                 >
                   Configure
@@ -295,7 +301,8 @@ export function ScenariosPage() {
                 <button
                   type="button"
                   className="ghost"
-                  disabled={actionsDisabled}
+                  disabled={actionsDisabled || !isAdmin}
+                  title={isAdmin ? undefined : 'Admin role required'}
                   onClick={() => void remove(scenario.id)}
                 >
                   Delete

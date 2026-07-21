@@ -15,6 +15,7 @@ load_dotenv()  # also cwd .env if present
 logging.basicConfig(level=logging.INFO)
 
 from test_platform_api.app import create_app
+from test_platform_api.auth import AuthConfig
 from test_platform_api.db import create_session_factory
 from test_platform_api.event_ingest import poll_events_once
 from test_platform_api.redis_bus import RedisEventConsumer, RedisEventPublisher
@@ -47,7 +48,7 @@ def build_app():
     session_factory = create_session_factory(database_url)
     client = redis.Redis.from_url(redis_url, decode_responses=True)
     publisher = RedisEventPublisher(client)
-    app = create_app(session_factory, publisher)
+    app = create_app(session_factory, publisher, auth_config=AuthConfig.from_env())
     _start_event_poller(session_factory, redis_url)
     return app
 

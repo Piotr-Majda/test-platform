@@ -148,6 +148,13 @@ cd services/executor && uv run pytest
 | `VITE_API_URL` | *(unset → `/api` proxy)* | web |
 | `OPENAI_API_KEY` | *(unset → heuristic analysis)* | API AI analyzer |
 | `ANALYSIS_MODE` | *(auto)* | set `heuristic` to force non-LLM analysis |
+| `AUTH_ADMIN_USERNAME` | `admin` | API login (optional override) |
+| `AUTH_ADMIN_PASSWORD` | *(required)* | API login secret |
+| `AUTH_VIEWER_USERNAME` | `viewer` | API login (optional override) |
+| `AUTH_VIEWER_PASSWORD` | *(required)* | API login secret |
+| `AUTH_SECRET` | *(required)* | signs HTTP-only login sessions |
+| `AUTH_SESSION_TTL_SECONDS` | `28800` | login lifetime (8 hours) |
+| `AUTH_COOKIE_SECURE` | `true` | HTTPS-only cookie; compose sets `false` locally |
 | `ARTIFACTS_DIR` | `<repo>/artifacts` | API + executor |
 | `S3_BUCKET` | *(unset → local artifacts)* | API + executor |
 | `S3_ENDPOINT_URL` | *(required with `S3_BUCKET`)* | API + executor |
@@ -161,6 +168,15 @@ When either the `S3_*` variables or Railway's generic `AWS_*` variables are pres
 are stored in an S3-compatible bucket. Without a bucket variable, local filesystem storage
 remains active for development and Docker Compose.
 
+### Demo access roles
+
+- `admin` can create, configure, run, analyze, export, and delete scenarios.
+- `viewer` can browse results, run existing scenarios, launch AI analysis, and download reports/artifacts. Create, configure, and delete operations are rejected by the API and disabled in the UI.
+- Login state is stored in a signed, HTTP-only, `SameSite=Lax` cookie. Production starts only when both passwords and `AUTH_SECRET` are configured.
+- Executor callbacks remain private service-to-service endpoints and are blocked by the public nginx gateway.
+
+The credentials in `docker-compose.yml` are development-only defaults. Never reuse them in Railway or another public environment.
+
 Contracts version must match between API and executor (`CONTRACTS_VERSION`, currently **0.8.0**). Restart both after upgrading contracts.
 
 ## Slice status
@@ -172,7 +188,8 @@ Contracts version must match between API and executor (`CONTRACTS_VERSION`, curr
 | 1.3 | JustJoinIT + YouTube example tests | Done |
 | 1.4 | AI failure analysis (GWT reports, async jobs, ZIP export) | Done |
 | Polish | Scenario configure UI, test reorder, artifact retention | In progress / demo |
-| Later | CI, schedule, auth, self-heal | Backlog |
+| Auth | Admin/viewer sessions and server-side authorization | Done |
+| Later | CI, schedule, self-heal | Backlog |
 
 ## Capabilities overview
 

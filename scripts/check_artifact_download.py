@@ -1,13 +1,21 @@
 import time
+import os
 from pathlib import Path
 
 import httpx
 
-API = "http://localhost:8001"
+API = os.getenv("API_URL", "http://localhost:8001")
 
 
 def main() -> None:
     client = httpx.Client(base_url=API, timeout=30.0)
+    client.post(
+        "/auth/login",
+        json={
+            "username": os.getenv("AUTH_ADMIN_USERNAME", "admin"),
+            "password": os.getenv("AUTH_ADMIN_PASSWORD", "admin-demo"),
+        },
+    ).raise_for_status()
     tests = client.get("/tests").json()
     scenario = client.post(
         "/scenarios", json={"name": "artifact-check", "test_ids": [tests[0]["id"]]}
