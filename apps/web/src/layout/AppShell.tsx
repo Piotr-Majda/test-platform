@@ -1,13 +1,9 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { useNavStack } from '../navigation/NavStack'
+import { NavLink, Outlet } from 'react-router-dom'
 import { AppShellFrame } from './SubHeader'
 import { useAuth } from '../auth/AuthContext'
 
 export function AppShell() {
   const { user, isAdmin, logout } = useAuth()
-  const { back, canBack } = useNavStack()
-  const location = useLocation()
-  const showBack = canBack || location.pathname !== '/'
 
   return (
     <AppShellFrame
@@ -37,11 +33,6 @@ export function AppShell() {
           </nav>
           <div className="app-header-actions">
             <span className={`role-badge role-${user!.role}`}>{user!.role}</span>
-            {showBack ? (
-              <button type="button" className="ghost" onClick={() => back('/')}>
-                Back
-              </button>
-            ) : null}
             <button type="button" className="ghost" onClick={() => void logout()}>
               Sign out
             </button>
