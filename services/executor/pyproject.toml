@@ -1,6 +1,6 @@
 [project]
 name = "test-platform-executor"
-version = "0.1.0"
+version = "0.1.1"
 description = "Pluggable test executor with worker pool for Test Platform"
 requires-python = ">=3.12"
 dependencies = [

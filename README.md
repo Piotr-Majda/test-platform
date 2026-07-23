@@ -227,6 +227,13 @@ PluginManifest {
 `LOG_SCHEMA_VERSION` must also match (currently **1.0**). Registration returns HTTP 409
 on a mismatch; upgrade and restart both services together.
 
+The executor framework version is currently **0.1.1**. Any change that can affect catalog
+entries, step identifiers, execution behavior, or outcomes must increment this package
+version before deployment and be recorded in
+[`services/executor/CHANGELOG.md`](services/executor/CHANGELOG.md). Existing runs retain
+their original framework version, so history can distinguish behavior before and after a
+framework change.
+
 Plugins normalize pytest, Playwright, API-client, or integration-runner output to
 `StructuredLogEntry` before storage. The canonical entry contains:
 

@@ -21,7 +21,7 @@ def framework_version() -> str:
     try:
         return version("test-platform-executor")
     except PackageNotFoundError:
-        return "0.1.0"
+        return "0.1.1"
 
 
 def register_catalog(api_url: str, plugin_id: str) -> None:

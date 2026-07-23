@@ -182,8 +182,13 @@ User opens Console
 
 | Contract | Current value |
 |----------|---------------|
+| Executor framework | `0.1.1` |
 | Shared platform contract | `0.8.0` |
 | Structured log schema | `1.0` |
+
+Executor changes that can alter catalog entries, step IDs, execution semantics, or outcomes
+require a version increment and an entry in `services/executor/CHANGELOG.md`. The registered
+version is stamped on every run, preserving the boundary between historical behaviors.
 
 The repository currently contains 93 Python tests: 13 contracts, 52 API, and 28 executor,
 plus frontend lint and production-build checks.
