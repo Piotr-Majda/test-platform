@@ -1,7 +1,36 @@
 # Test Platform
 
-Public demo platform for composing and running pluggable pytest tests, observing live
-results, retaining execution history and artifacts, and analyzing failures with optional AI.
+Test results are often fragmented across CI jobs, focused on a single execution, and
+discarded together with short-lived logs and artifacts. This makes it difficult to determine
+when a regression started, whether a failure depends on a product version or environment,
+and whether the same problem has already occurred.
+
+Test Platform is a contract-driven orchestration and quality intelligence layer for one
+organization-specific test system. It turns isolated executions into version- and
+environment-aware history with structured run, test, step, log, and artifact data. This
+reduces repeated manual investigation and enables trend, flakiness, regression, and recurring
+failure analysis.
+
+## Problem, value, and scope
+
+- **Problem:** CI systems can start jobs but do not understand the domain structure of
+  scenarios, tests, steps, failures, and retained evidence. Traditional reports primarily
+  explain one execution rather than quality changes over time.
+- **Core value:** The platform converts test execution into consistent historical quality
+  intelligence, making failures easier to diagnose and compare across product versions,
+  test-system versions, contract versions, and environments.
+- **Contract-driven integration:** One platform instance integrates with one concrete test
+  system through versioned contracts for discovery manifests, execution commands, lifecycle
+  events, structured logs, and artifacts. That test system may internally combine pytest,
+  Playwright, API, integration, and custom testing libraries.
+- **Readable and analyzable evidence:** Explicit test steps and enforced structured logs make
+  scenario intent and failure location understandable to humans while providing reliable input
+  for deterministic and AI-assisted analysis.
+- **Scenario composition:** Test discovery creates a catalog from which ordered, reusable
+  scenarios can be composed without embedding the catalog and execution lifecycle in CI jobs.
+- **Positioning:** The platform complements Jenkins or GitHub Actions as CI orchestrators and
+  reporting tools such as Allure. It does not replace them; it adds test-domain orchestration,
+  durable history, normalized observability, and cross-run analysis.
 
 - Live demo: [test-platform-demo.up.railway.app](https://test-platform-demo.up.railway.app/)
 - Current architecture decisions and delivery status: [project-summary.md](project-summary.md)
@@ -26,7 +55,7 @@ and the code are authoritative.
   The UI can derive and download TXT or download canonical JSON.
 - Manual analysis for a scenario, fingerprint, run, or single test. Reports can be
   downloaded as ZIP files with JSON, Markdown, and referenced artifacts.
-- Signed HTTP-only sessions with `admin` and `viewer` roles.
+- Signed HTTP-only sessions with `admin`, `viewer`, and passwordless read-only `guest` roles.
 - Responsive React UI for desktop and narrow/mobile screens.
 - Local Docker Compose stack and a public HTTPS Railway deployment.
 
@@ -117,6 +146,10 @@ Development-only logins from `docker-compose.yml`:
 
 Never use these credentials in a public environment.
 
+The public demo also provides **Explore as guest** without credentials. Guest access is
+read-only: it cannot run tests, trigger AI analysis, create/configure/delete scenarios, or
+perform other state-changing API operations.
+
 Stop containers while retaining data:
 
 ```bash
@@ -171,8 +204,9 @@ executor talks directly to `http://localhost:8001`.
 
 ## Quick demo flow
 
-1. Log in as `viewer` to explore the public demo, or as `admin` to manage scenarios.
-2. Open an existing scenario and run it.
+1. Select **Explore as guest** to browse the public demo without credentials.
+2. Open an existing scenario and inspect its retained runs, steps, Console logs, artifacts,
+   history, and existing analysis reports.
 3. Watch run, test, and step status update; inspect errors, artifacts, and Console output.
 4. Open History to inspect reliability, duration trends, flakiness, and fingerprints.
 5. Trigger analysis for a run, test, scenario, or fingerprint and download its report.
@@ -328,7 +362,7 @@ The repository currently contains 93 Python tests: 13 contracts, 52 API, and 28 
 | History, retention, trends, flakiness, fingerprints | Done |
 | Example UI/API/integration-style tests | Done |
 | Manual heuristic/AI analysis and export | Done |
-| Admin/viewer authentication and private API gateway | Done |
+| Admin/viewer/guest authentication and private API gateway | Guest implemented; deployment verification pending |
 | Responsive/mobile dashboard | Done |
 | Versioned test/step Console logs with TXT/JSON download | Done |
 | Public Railway HTTPS deployment with PostgreSQL, Redis, and bucket | Done |

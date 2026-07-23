@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-Role = Literal["admin", "viewer"]
+Role = Literal["admin", "viewer", "guest"]
 SESSION_COOKIE = "tp_session"
 
 
@@ -110,11 +110,14 @@ class AuthManager:
             if int(payload["exp"]) < int(time.time()):
                 return None
             role = payload["role"]
-            if role not in {"admin", "viewer"}:
+            if role not in {"admin", "viewer", "guest"}:
                 return None
             return AuthUser(username=str(payload["sub"]), role=role)
         except (ValueError, KeyError, TypeError, json.JSONDecodeError):
             return None
+
+    def guest_user(self) -> AuthUser:
+        return AuthUser(username="guest", role="guest")
 
 
 def _encode(value: bytes) -> str:

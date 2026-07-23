@@ -76,10 +76,13 @@ OpenAI key is configured and `pydantic-ai` when enabled.
 
 ### Authentication and public demo
 
-- Two roles: `admin` and `viewer`.
+- Three roles: `admin`, `viewer`, and passwordless `guest`.
 - Admin has full scenario management.
 - Viewer can browse, run existing scenarios, analyze, and download; viewer cannot create,
   configure, or delete.
+- Guest can browse persisted scenarios, runs, logs, artifacts, and existing analysis reports.
+  Guest cannot run tests, trigger AI analysis, or modify data, which makes the public CV demo
+  usable without exposing credentials or variable-cost operations.
 - Signed HTTP-only cookie sessions are enforced by the API.
 - nginx is the only public service and proxies browser `/api/*` requests to the private API.
 - Plugin registration and executor event callback routes are blocked at the public gateway.
@@ -143,6 +146,24 @@ User opens Console
   -> optional TXT/JSON download
 ```
 
+### Required execution reliability work
+
+- Run every pytest invocation in a dedicated child process; the long-lived worker supervises
+  it, forwards versioned events, applies timeout/cancellation, captures stdout/stderr, and
+  acknowledges the Redis command only after a terminal result.
+- Model `test_outcome` independently as `passed | failed | not_run` and execution outcome as
+  `succeeded | test_failed | infrastructure_failed | timed_out | cancelled`.
+- Capture pytest `setup`, `call`, and `teardown` phases separately. A passed test followed by
+  teardown failure remains a passed test with an infrastructure-failed execution; setup
+  failure before the test body produces `not_run`.
+- Persist pytest exit code, terminating signal, child-process exception, and raw diagnostics.
+- Isolate artifacts by `run_id`, verify shared storage access at startup, and prevent duplicate
+  Redis delivery from overwriting a more precise terminal outcome.
+- Calculate test flakiness only from actual test failures. Report platform/framework execution
+  reliability separately.
+- Cover passed/failed/not-run, teardown failure, timeout, crash, duplicate delivery, shutdown,
+  and simultaneous run isolation with integration tests.
+
 ## Accepted design decisions
 
 | Topic | Decision and reason |
@@ -150,7 +171,8 @@ User opens Console
 | Platform shape | Modular monolith plus separate executor. One API owns the domain and persistence; execution can scale independently without premature microservices. |
 | Event transport | Redis Streams. Consumer groups, acknowledgements, and replay fit queued run execution better than synchronous HTTP; less operational weight than Kafka for this scale. |
 | Execution | Hybrid pytest plus DDD-style steps and adapters. Existing pytest/Playwright ecosystems remain usable while business steps stay reusable and test data stays separate from I/O details. |
-| Concurrency | Long-lived N-worker pool. Multiple runs can proceed concurrently; ordered tests within a run stay deterministic. |
+| Concurrency | Target: a long-lived supervisor with one isolated pytest child process per run. Multiple runs may proceed concurrently without sharing pytest module globals. |
+| Result semantics | Test outcome is independent from execution health. Setup, teardown, timeout, worker, and storage failures remain visible without being counted as product-test failures. |
 | System database | PostgreSQL with Alembic migrations. SQLite is restricted to isolated API tests. |
 | Artifact storage | Port with local-filesystem and S3-compatible implementations. Railway Bucket provides persistent cloud storage without an AWS account. |
 | Browser/API boundary | nginx serves the SPA and proxies `/api`; the API has no public Railway domain. This avoids CORS exposure and keeps executor callbacks private. |
@@ -172,8 +194,9 @@ User opens Console
   does not yet validate or route a scenario containing tests from multiple plugins.
 - The demo runs one executor plugin service, although the catalog model stores `plugin_id`
   and can retain catalogs for more than one registered plugin.
-- Worker threads scale concurrency inside one executor instance; distributed autoscaling,
-  lease recovery, and dead-letter handling are not implemented.
+- The current executor invokes pytest inside worker threads. It must be replaced with isolated
+  child processes before parallel execution can be considered reliable.
+- Distributed autoscaling, lease recovery, and dead-letter handling are not implemented.
 - Analysis jobs are manual and are not yet backed by a durable job scheduler.
 - External demo tests depend on third-party sites and feeds, so their live behavior can
   change independently of the platform.
@@ -203,7 +226,7 @@ plus frontend lint and production-build checks.
 | Example Google, JustJoinIT, YouTube, and flaky tests | Done |
 | Four-scope analysis and report export | Done |
 | PostgreSQL/Alembic and S3-compatible artifact storage | Done |
-| Admin/viewer demo access and private API gateway | Done |
+| Admin/viewer/guest demo access and private API gateway | Guest implemented; public deployment verification pending |
 | Responsive/mobile UI | Done |
 | Versioned test/step Console | Done |
 | Railway public HTTPS deployment | Done |

@@ -168,8 +168,8 @@ export type ScenarioHistory = {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
+    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   })
   if (!response.ok) {
     const text = await response.text()
@@ -190,7 +190,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export type AuthRole = 'admin' | 'viewer'
+export type AuthRole = 'admin' | 'viewer' | 'guest'
 
 export type AuthUser = {
   username: string
@@ -201,6 +201,12 @@ export function login(username: string, password: string): Promise<AuthUser> {
   return request<AuthUser>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
+  })
+}
+
+export function loginAsGuest(): Promise<AuthUser> {
+  return request<AuthUser>('/auth/guest', {
+    method: 'POST',
   })
 }
 

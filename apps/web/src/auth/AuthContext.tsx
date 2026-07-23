@@ -3,6 +3,7 @@ import {
   getCurrentUser,
   login as loginRequest,
   logout as logoutRequest,
+  loginAsGuest as loginAsGuestRequest,
   type AuthUser,
 } from '../api'
 import { LoginPage } from './LoginPage'
@@ -12,6 +13,7 @@ type AuthContextValue = {
   isAdmin: boolean
   login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  loginAsGuest: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -53,6 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } finally {
           setUser(null)
         }
+      },
+      loginAsGuest: async () => {
+        setUser(await loginAsGuestRequest())
       },
     }),
     [user],

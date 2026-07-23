@@ -79,3 +79,43 @@ def test_admin_can_manage_scenarios_and_logout_clears_session() -> None:
 
     assert client.post("/auth/logout").status_code == 204
     assert client.get("/auth/me").status_code == 401
+
+
+def test_guest_can_read_but_cannot_run_tests_analyze_or_modify() -> None:
+    client = _client()
+
+    _login(client, "admin", "admin-secret")
+    scenario = client.post(
+        "/scenarios",
+        json={"name": "Guest demo", "test_ids": ["checkout"]},
+    ).json()
+    client.post("/auth/logout")
+
+    guest_response = client.post("/auth/guest")
+    assert guest_response.status_code == 200
+    assert guest_response.json() == {"username": "guest", "role": "guest"}
+    assert "HttpOnly" in guest_response.headers["set-cookie"]
+
+    assert client.get("/auth/me").json() == {
+        "username": "guest",
+        "role": "guest",
+    }
+    assert client.get("/scenarios").status_code == 200
+
+    assert client.post(f"/scenarios/{scenario['id']}/runs").status_code == 403
+    assert client.post(
+        "/analyses",
+        json={"scope": "scenario", "scenario_id": scenario["id"]},
+    ).status_code == 403
+    assert client.post(
+        "/scenarios",
+        json={"name": "Forbidden", "test_ids": ["checkout"]},
+    ).status_code == 403
+    assert client.patch(
+        f"/scenarios/{scenario['id']}",
+        json={"name": "Forbidden"},
+    ).status_code == 403
+    assert client.delete(f"/scenarios/{scenario['id']}").status_code == 403
+
+    assert client.post("/auth/logout").status_code == 204
+    assert client.get("/auth/me").status_code == 401

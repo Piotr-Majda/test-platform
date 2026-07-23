@@ -224,7 +224,12 @@ def create_app(
             return await call_next(request)
 
         path = request.url.path
-        if request.method == "OPTIONS" or path in {"/health", "/auth/login", "/auth/logout"}:
+        if request.method == "OPTIONS" or path in {
+            "/health",
+            "/auth/login",
+            "/auth/logout",
+            "/auth/guest",
+        }:
             return await call_next(request)
 
         # These callbacks are reachable only through Railway's private network;
@@ -239,6 +244,12 @@ def create_app(
         if user is None:
             return JSONResponse({"detail": "Authentication required"}, status_code=401)
         request.state.user = user
+
+        if user.role == "guest" and request.method not in {"GET", "HEAD"}:
+            return JSONResponse(
+                {"detail": "Guest role is read-only"},
+                status_code=403,
+            )
 
         admin_only = (
             (request.method == "POST" and path == "/scenarios")
@@ -283,6 +294,22 @@ def create_app(
     @app.post("/auth/logout", status_code=204)
     def logout(response: Response) -> None:
         response.delete_cookie(SESSION_COOKIE, path="/")
+
+    @app.post("/auth/guest", response_model=AuthUser)
+    def guest_login(response: Response) -> AuthUser:
+        auth: AuthManager = app.state.auth
+        user = auth.guest_user()
+
+        response.set_cookie(
+            SESSION_COOKIE,
+            auth.create_session(user),
+            max_age=auth.config.session_ttl_seconds,
+            httponly=True,
+            secure=auth.config.secure_cookie,
+            samesite="lax",
+            path="/",
+        )
+        return user
 
     @app.get("/auth/me", response_model=AuthUser)
     def current_user(request: Request) -> AuthUser:

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useAuth } from './AuthContext'
 
 export function LoginPage() {
-  const { login } = useAuth()
+  const { login, loginAsGuest } = useAuth()
   const [username, setUsername] = useState('viewer')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -16,6 +16,18 @@ export function LoginPage() {
       await login(username.trim(), password)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const openGuestDemo = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await loginAsGuest()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not open guest demo')
     } finally {
       setBusy(false)
     }
@@ -54,8 +66,19 @@ export function LoginPage() {
           <button className="primary login-submit" type="submit" disabled={busy}>
             {busy ? 'Signing in…' : 'Open demo'}
           </button>
+          <button
+            className="ghost login-submit login-guest"
+            type="button"
+            disabled={busy}
+            onClick={() => void openGuestDemo()}
+          >
+            {busy ? 'Opening demo…' : 'Explore as guest'}
+          </button>
         </form>
-        <p className="login-note">Demo access is read-only for scenario configuration.</p>
+        <p className="login-note">
+          Guest access is read-only. Running tests, AI analysis and configuration changes are
+          disabled.
+        </p>
       </section>
     </main>
   )
