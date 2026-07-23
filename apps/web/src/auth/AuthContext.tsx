@@ -11,6 +11,8 @@ import { LoginPage } from './LoginPage'
 type AuthContextValue = {
   user: AuthUser | null
   isAdmin: boolean
+  isGuest: boolean
+  isViewer: boolean
   login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
   loginAsGuest: () => Promise<void>
@@ -46,6 +48,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       isAdmin: user?.role === 'admin',
+      isGuest: user?.role === 'guest',
+      isViewer: user?.role === 'viewer',
       login: async (username, password) => {
         setUser(await loginRequest(username, password))
       },

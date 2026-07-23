@@ -21,7 +21,7 @@ type Row = {
 }
 
 export function ScenariosPage() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, isGuest } = useAuth()
   const { go } = useNavStack()
   const [rows, setRows] = useState<Row[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -194,7 +194,8 @@ export function ScenariosPage() {
             <button
               type="button"
               className="primary"
-              disabled={actionsDisabled || rows.length === 0}
+              disabled={actionsDisabled || isGuest || rows.length === 0}
+              title={!isGuest ? undefined : 'Guest role cant run scenarios'}
               onClick={() => void runAllParallel()}
             >
               {runAllBusy ? 'Starting all…' : 'Run all'}
@@ -268,7 +269,8 @@ export function ScenariosPage() {
                 <button
                   type="button"
                   className="primary"
-                  disabled={actionsDisabled}
+                  disabled={actionsDisabled || isGuest }
+                  title={!isGuest ? undefined : 'Guest role cant run scenario'}
                   onClick={() => void runOne(scenario.id)}
                 >
                   {runningId === scenario.id ? 'Starting…' : 'Run'}
