@@ -29,7 +29,7 @@ import { useNavStack } from '../navigation/NavStack'
 import { useAuth } from '../auth/AuthContext'
 
 export function ScenarioPage() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, isGuest } = useAuth()
   const { scenarioId = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const { go, back } = useNavStack()
@@ -341,7 +341,7 @@ export function ScenarioPage() {
             </div>
           </div>
           <div className="sticky-run-actions">
-            <button type="button" className="primary" disabled={busy} onClick={() => void runScenario()}>
+            <button type="button" className="primary" disabled={busy || isGuest } title={!isGuest ? undefined: "Guest can't run scenario"} onClick={() => void runScenario()}>
               {busy ? 'Starting…' : 'Run'}
             </button>
             <button

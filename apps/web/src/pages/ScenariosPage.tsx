@@ -195,7 +195,7 @@ export function ScenariosPage() {
               type="button"
               className="primary"
               disabled={actionsDisabled || isGuest || rows.length === 0}
-              title={!isGuest ? undefined : 'Guest role cant run scenarios'}
+              title={!isGuest ? undefined : "Guest can't run scenario"}
               onClick={() => void runAllParallel()}
             >
               {runAllBusy ? 'Starting all…' : 'Run all'}
@@ -270,7 +270,7 @@ export function ScenariosPage() {
                   type="button"
                   className="primary"
                   disabled={actionsDisabled || isGuest }
-                  title={!isGuest ? undefined : 'Guest role cant run scenario'}
+                  title={!isGuest ? undefined : "Guest can't run scenario"}
                   onClick={() => void runOne(scenario.id)}
                 >
                   {runningId === scenario.id ? 'Starting…' : 'Run'}
