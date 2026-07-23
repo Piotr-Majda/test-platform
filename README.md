@@ -1,83 +1,99 @@
 # Test Platform
 
-Portfolio platform for orchestrating UI/API test scenarios with run history, flakiness insights, artifact retention, and optional AI failure analysis.
+Public demo platform for composing and running pluggable pytest tests, observing live
+results, retaining execution history and artifacts, and analyzing failures with optional AI.
 
-- Product decisions & slice status: [project-summary.md](project-summary.md)
-- Original vision: [prd.md](prd.md)
+- Live demo: [test-platform-demo.up.railway.app](https://test-platform-demo.up.railway.app/)
+- Current architecture decisions and delivery status: [project-summary.md](project-summary.md)
+- Product vision, requirements, and roadmap: [prd.md](prd.md)
 
-## Layout
+## Documentation ownership
+
+Use this README for the current implementation, local setup, and operation. Use
+`project-summary.md` for accepted technical decisions and known constraints. Use `prd.md`
+for product intent and future scope. If they disagree about what exists today, this README
+and the code are authoritative.
+
+## Current capabilities
+
+- Dynamic test catalog registered by an executor plugin.
+- Ordered, multi-test scenarios with SUT version and separate history/artifact retention.
+- Long-lived Redis-backed worker pool. Different runs may execute concurrently; tests
+  inside one scenario run execute in their configured order.
+- Live run/test/step status, errors, artifacts, durations, history, flakiness, reliability,
+  trends, and error fingerprints.
+- Versioned, framework-neutral structured logs with test- and step-level Console views.
+  The UI can derive and download TXT or download canonical JSON.
+- Manual analysis for a scenario, fingerprint, run, or single test. Reports can be
+  downloaded as ZIP files with JSON, Markdown, and referenced artifacts.
+- Signed HTTP-only sessions with `admin` and `viewer` roles.
+- Responsive React UI for desktop and narrow/mobile screens.
+- Local Docker Compose stack and a public HTTPS Railway deployment.
+
+## Repository layout
 
 | Path | Role |
 |------|------|
-| `packages/contracts` | Versioned Pydantic contracts + Redis stream helpers (`test-platform-contracts`) |
-| `services/api` | FastAPI + SQLAlchemy orchestration API (SQLite default) |
-| `services/executor` | Pluggable executor: `@step` framework, N-worker pool, example tests |
-| `apps/web` | React + Vite UI (catalog, scenario config, runs, history, logs, AI reports) |
+| `packages/contracts` | Versioned Pydantic messages, models, log schema, and Redis Stream helpers |
+| `services/api` | FastAPI orchestration API, SQLAlchemy, Alembic, analysis, auth, and artifact access |
+| `services/executor` | Pluggable pytest executor, DDD-style `@step` framework, adapters, and worker pool |
+| `apps/web` | React + Vite dashboard and nginx public gateway |
+| `scripts` | E2E and artifact-download smoke checks |
+
+## Runtime architecture
+
+```text
+Browser
+  -> public web/nginx (HTTPS on Railway)
+       -> React static files
+       -> /api/* proxy
+            -> private FastAPI service
+                 -> PostgreSQL (platform state)
+                 -> Redis Streams (execute commands and progress events)
+                 -> S3-compatible bucket or local filesystem (artifacts)
+
+Private executor service
+  -> registers PluginManifest with the API
+  -> consumes execute commands from Redis
+  -> runs pytest tests through steps and adapters
+  -> publishes progress events to Redis
+  -> writes structured logs and other artifacts
+```
+
+On Railway, only the web service has a public domain. API and executor communication uses
+the private service network. nginx does not expose plugin registration or executor event
+callback routes. Railway configuration is managed in Railway rather than committed as a
+`railway.toml`.
 
 ## Prerequisites
 
-- Python 3.12+ and [uv](https://github.com/astral-sh/uv)
+- Python 3.12+ and [uv](https://docs.astral.sh/uv/)
 - Node 20+
-- Redis on `localhost:6379`  
-  Example: `docker run -d --name test-platform-redis -p 6379:6379 redis:7-alpine`
+- PostgreSQL 16+
+- Redis 7+
 
-Postgres is the app database (default `public` schema, Alembic-managed).  
-Unit tests use in-memory SQLite (`sqlite:///:memory:`). Redis is required for run orchestration.
+PostgreSQL is the system database and is managed with Alembic. API unit tests use
+in-memory SQLite. Redis is required for real run orchestration.
 
 ## Install
 
 ```bash
-cd packages/contracts && uv sync
-cd ../../services/api && uv sync
-cd ../executor && uv sync
-cd ../../apps/web && npm install
+cd packages/contracts
+uv sync
+
+cd ../../services/api
+uv sync
+
+cd ../executor
+uv sync
+
+cd ../../apps/web
+npm install
 ```
 
-## Database migrations (Alembic)
+## Run locally
 
-From `services/api`:
-
-```bash
-# Apply migrations (requires Postgres + DATABASE_URL)
-uv run alembic upgrade head
-
-# Create a new revision after model changes
-uv run alembic revision --autogenerate -m "describe change"
-```
-
-Default schema: Postgres `public` (no custom schema namespace).
-
-## Run locally (three terminals)
-
-```bash
-# 0) Postgres + Redis (or use docker compose for infra only)
-docker compose up -d postgres redis
-
-# 1) API (default port 8001)
-cd services/api
-$env:DATABASE_URL="postgresql+psycopg://platform:platform@localhost:5432/platform"
-uv run alembic upgrade head
-uv run test-platform-api
-```
-
-Or keep using Docker for the full stack (recommended for demos).
-
-```bash
-# 2) Executor (registers plugin catalog, starts worker pool)
-cd services/executor
-uv run test-platform-executor
-
-# 3) UI
-cd apps/web
-npm run dev
-```
-
-Open http://localhost:5173 — Vite proxies `/api` to the API (override with `VITE_API_URL` if needed).  
-API docs: http://localhost:8001/docs
-
-## Docker Compose (demo)
-
-One stack: Postgres + Redis + API + executor + web.
+The full Docker Compose stack is the simplest demo setup:
 
 ```bash
 docker compose up --build
@@ -86,123 +102,227 @@ docker compose up --build
 | Service | URL |
 |---------|-----|
 | UI | http://localhost:8080 |
-| API docs | http://localhost:8001/docs |
-| Postgres | `localhost:5432` (user/db/password: `platform`) |
+| Direct API docs | http://localhost:8001/api/docs |
+| API health | http://localhost:8001/health |
+| PostgreSQL | `localhost:5432` (`platform` / `platform` / `platform`) |
+| Redis | `localhost:6379` |
 
-API container runs `alembic upgrade head` on start. Data lives in Docker volumes (`platform-pg`, `platform-data`).
+The API container applies `alembic upgrade head` before startup. PostgreSQL data is stored
+in `platform-pg`; local artifacts are shared by API and executor in `platform-data`.
 
-Optional AI key:
+Development-only logins from `docker-compose.yml`:
 
-```bash
-# PowerShell
-$env:OPENAI_API_KEY="sk-..."
-docker compose up --build
-```
+- admin: `admin` / `admin-demo`
+- viewer: `viewer` / `viewer-demo`
 
-Stop containers (keeps volumes):
+Never use these credentials in a public environment.
+
+Stop containers while retaining data:
 
 ```bash
 docker compose down
 ```
 
-Wipe demo data too: `docker compose down -v`.
+Delete local demo volumes too:
 
-### Quick demo flow
+```bash
+docker compose down -v
+```
 
-1. Confirm catalog tests under **Available tests** (`google_title`, `flaky_coin`, JustJoinIT, YouTube, …).
-2. Click **New scenario** → set SUT, history retention, artifact retention, add/reorder tests → **Save**.
-3. **Run** the scenario; inspect **Run status** (steps, errors, artifacts, in-app logs).
-4. Open **History** for flakiness, reliability, duration trends, and fingerprint timelines.
-5. Use **Configure** to change SUT, retention, tests, or order (panel closes after save).
-6. Optional: **Analyze** (scenario / fingerprint / failed run) when `OPENAI_API_KEY` is set.
+### Run services directly
 
-## Scenario configuration
+First start infrastructure:
+
+```bash
+docker compose up -d postgres redis
+```
+
+Then use separate PowerShell terminals.
+
+API:
+
+```powershell
+cd services/api
+$env:DATABASE_URL = "postgresql+psycopg://platform:platform@localhost:5432/platform"
+$env:AUTH_ADMIN_PASSWORD = "admin-demo"
+$env:AUTH_VIEWER_PASSWORD = "viewer-demo"
+$env:AUTH_SECRET = "local-development-secret-change-me"
+$env:AUTH_COOKIE_SECURE = "false"
+uv run alembic upgrade head
+uv run test-platform-api
+```
+
+Executor:
+
+```powershell
+cd services/executor
+uv run test-platform-executor
+```
+
+Web:
+
+```powershell
+cd apps/web
+npm run dev
+```
+
+Open http://localhost:5173. Vite sends browser API calls through its `/api` proxy. The
+executor talks directly to `http://localhost:8001`.
+
+## Quick demo flow
+
+1. Log in as `viewer` to explore the public demo, or as `admin` to manage scenarios.
+2. Open an existing scenario and run it.
+3. Watch run, test, and step status update; inspect errors, artifacts, and Console output.
+4. Open History to inspect reliability, duration trends, flakiness, and fingerprints.
+5. Trigger analysis for a run, test, scenario, or fingerprint and download its report.
+6. As admin, create or configure a scenario, reorder tests, and set retention.
+
+The catalog currently includes example Google, flaky-coin, JustJoinIT, and YouTube tests.
+Network-dependent examples can fail when their external target changes or is unavailable;
+that behavior is intentionally visible in history and analysis.
+
+## Roles
+
+| Action | Admin | Viewer |
+|--------|:-----:|:------:|
+| Browse scenarios, runs, history, logs, and artifacts | Yes | Yes |
+| Run an existing scenario | Yes | Yes |
+| Trigger analysis and download reports/artifacts | Yes | Yes |
+| Create or configure a scenario | Yes | No |
+| Delete a scenario | Yes | No |
+
+The UI hides or disables unavailable actions, and the API enforces the same authorization.
+Sessions are signed and stored in an HTTP-only, `SameSite=Lax` cookie. Production cookies
+must be HTTPS-only.
+
+## Scenario configuration and retention
 
 | Setting | Purpose |
 |---------|---------|
-| **SUT version** | Labels runs for flakiness grouped by system-under-test version |
-| **History max runs / days** | How many run records stay in the history window (`max_runs` ∩ `max_days`) |
-| **Artifact max runs / days** | Independent disk cleanup for logs/snapshots under `artifacts/` |
-| **Keep ≥1 failed in history** | Also keep the newest failed run still inside the history window (even if older than artifact max runs) |
-| **Test order** | Execution order; reorder with ↑ / ↓ or by re-adding |
+| **SUT version** | Labels runs and scopes history metrics to a system-under-test version |
+| **History max runs / days** | Keeps the intersection of the newest `max_runs` and runs within `max_days` |
+| **Artifact max runs / days** | Independently cleans logs, snapshots, screenshots, and other artifacts |
+| **Keep at least one failed** | Preserves the newest failed artifact set still inside the history window |
+| **Test order** | Defines sequential execution order inside the scenario run |
 
-History and artifacts are pruned on new runs (and artifact settings apply immediately on configure-save).
+History and artifacts are pruned when a run starts. Saving changed artifact retention also
+applies pruning immediately.
 
-## Automated tests
+## Versioned plugin and log contracts
 
-```bash
-cd packages/contracts && uv run pytest
-cd services/api && uv run pytest
-cd services/executor && uv run pytest
+The executor registers:
+
+```text
+PluginManifest {
+  plugin_id,
+  framework_version,
+  contracts_version,
+  log_schema_version,
+  tests[]
+}
 ```
 
-## Environment
+`CONTRACTS_VERSION` must match between API and executor (currently **0.8.0**).
+`LOG_SCHEMA_VERSION` must also match (currently **1.0**). Registration returns HTTP 409
+on a mismatch; upgrade and restart both services together.
 
-| Variable | Default | Used by |
-|----------|---------|---------|
-| `DATABASE_URL` | `postgresql+psycopg://…` (compose) / SQLite in tests | API |
-| `REDIS_URL` | `redis://localhost:6379/0` | API, executor |
-| `API_URL` | `http://localhost:8001` | executor (catalog registration) |
-| `API_PORT` | `8001` | API |
-| `WORKER_COUNT` | `2` | executor pool size |
-| `VITE_API_URL` | *(unset → `/api` proxy)* | web |
-| `OPENAI_API_KEY` | *(unset → heuristic analysis)* | API AI analyzer |
-| `ANALYSIS_MODE` | *(auto)* | set `heuristic` to force non-LLM analysis |
-| `AUTH_ADMIN_USERNAME` | `admin` | API login (optional override) |
-| `AUTH_ADMIN_PASSWORD` | *(required)* | API login secret |
-| `AUTH_VIEWER_USERNAME` | `viewer` | API login (optional override) |
-| `AUTH_VIEWER_PASSWORD` | *(required)* | API login secret |
-| `AUTH_SECRET` | *(required)* | signs HTTP-only login sessions |
-| `AUTH_SESSION_TTL_SECONDS` | `28800` | login lifetime (8 hours) |
-| `AUTH_COOKIE_SECURE` | `true` | HTTPS-only cookie; compose sets `false` locally |
-| `ARTIFACTS_DIR` | `<repo>/artifacts` | API + executor |
-| `S3_BUCKET` | *(unset → local artifacts)* | API + executor |
-| `S3_ENDPOINT_URL` | *(required with `S3_BUCKET`)* | API + executor |
-| `S3_ACCESS_KEY_ID` | *(required with `S3_BUCKET`)* | API + executor |
-| `S3_SECRET_ACCESS_KEY` | *(required with `S3_BUCKET`)* | API + executor |
-| `S3_REGION` | `auto` | API + executor |
-| `AWS_ENDPOINT_URL`, `AWS_S3_BUCKET_NAME`, `AWS_DEFAULT_REGION` | Railway Bucket aliases | API + executor |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Railway Bucket credentials | API + executor |
+Plugins normalize pytest, Playwright, API-client, or integration-runner output to
+`StructuredLogEntry` before storage. The canonical entry contains:
 
-When either the `S3_*` variables or Railway's generic `AWS_*` variables are present, artifacts
-are stored in an S3-compatible bucket. Without a bucket variable, local filesystem storage
-remains active for development and Docker Compose.
+```text
+timestamp, layer, component, level, message, duration_ms, event, data, children
+```
 
-### Demo access roles
-
-- `admin` can create, configure, run, analyze, export, and delete scenarios.
-- `viewer` can browse results, run existing scenarios, launch AI analysis, and download reports/artifacts. Create, configure, and delete operations are rejected by the API and disabled in the UI.
-- Login state is stored in a signed, HTTP-only, `SameSite=Lax` cookie. Production starts only when both passwords and `AUTH_SECRET` are configured.
-- Executor callbacks remain private service-to-service endpoints and are blocked by the public nginx gateway.
-
-The credentials in `docker-compose.yml` are development-only defaults. Never reuse them in Railway or another public environment.
-
-Contracts version must match between API and executor (`CONTRACTS_VERSION`, currently **0.8.0**). Structured plugin logs additionally declare `LOG_SCHEMA_VERSION` (currently **1.0**) in the plugin manifest. Restart API and executor after upgrading either contract.
-
-Structured logs are stored as canonical JSON artifacts, never in a framework-specific shape. Plugins map pytest, Playwright, API-client, or integration-runner output to `StructuredLogEntry` before storage. The dashboard requests logs only through semantic API routes:
+The dashboard reads logs only through the authenticated API:
 
 - `GET /runs/{run_id}/tests/{test_id}/logs`
 - `GET /runs/{run_id}/tests/{test_id}/steps/{step_id}/logs`
 
-The API owns artifact lookup, authorization, schema validation, and legacy-log adaptation. The web app owns presentation: human-readable Console lines, structured-tree inspection, and derived TXT/JSON downloads. TXT is generated on demand and is not duplicated in artifact storage.
+The API owns authorization, artifact lookup, schema validation, and adaptation of legacy
+logs. The UI owns formatting, layer filtering, structured-tree presentation, and derived
+TXT/JSON downloads. TXT is generated on demand and is not duplicated in storage.
 
-## Slice status
+## Artifact storage
 
-| Slice | Focus | Status |
-|-------|--------|--------|
-| 1 / 1.1 | Vertical slice: UI ↔ API ↔ Redis ↔ executor ↔ Google example | Done |
-| 1.2 | History, flakiness, SUT/FW versions, timelines, fingerprints | Done |
-| 1.3 | JustJoinIT + YouTube example tests | Done |
-| 1.4 | AI failure analysis (GWT reports, async jobs, ZIP export) | Done |
-| Polish | Scenario configure UI, test reorder, artifact retention | In progress / demo |
-| Auth | Admin/viewer sessions and server-side authorization | Done |
-| Later | CI, schedule, self-heal | Backlog |
+Without bucket settings, API and executor use `ARTIFACTS_DIR`. When bucket variables are
+present, both services use S3-compatible object storage. The Railway deployment uses a
+Railway Bucket; it does not require a separate AWS account.
 
-## Capabilities overview
+| Variable | Default / meaning | Used by |
+|----------|-------------------|---------|
+| `ARTIFACTS_DIR` | `<repo>/artifacts` | API, executor |
+| `S3_BUCKET` | unset means local storage | API, executor |
+| `S3_ENDPOINT_URL` | S3-compatible endpoint | API, executor |
+| `S3_ACCESS_KEY_ID` | bucket access key | API, executor |
+| `S3_SECRET_ACCESS_KEY` | bucket secret | API, executor |
+| `S3_REGION` | `auto` | API, executor |
+| `AWS_ENDPOINT_URL`, `AWS_S3_BUCKET_NAME`, `AWS_DEFAULT_REGION` | Railway Bucket aliases | API, executor |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Railway Bucket credentials | API, executor |
 
-- Plugin handshake via `POST /plugins/manifest` (contracts version gate)
-- Ordered multi-test scenarios with configure/create sharing the same form
-- Run history + flakiness + fingerprint timelines
-- Separate **artifact retention** (max runs, max days, keep-failed-only)
-- Structured logs in the UI (`test.log.json` / `step.log.json`)
-- Manual AI analysis scopes: scenario, fingerprint, or single run
+The browser never reads the bucket directly; all artifact and log access goes through the
+API.
+
+## Other environment variables
+
+| Variable | Default / meaning | Used by |
+|----------|-------------------|---------|
+| `DATABASE_URL` | local PostgreSQL URL when omitted | API |
+| `REDIS_URL` | `redis://localhost:6379/0` | API, executor |
+| `API_URL` | `http://localhost:8001` | executor |
+| `API_HOST` / `API_PORT` | `0.0.0.0` / `8001` | API |
+| `PLUGIN_ID` | `example-executor` | executor |
+| `WORKER_COUNT` | `2` | executor |
+| `VITE_API_URL` | unset uses `/api` | web build |
+| `OPENAI_API_KEY` | unset uses heuristic analysis | API |
+| `ANALYSIS_MODE` | auto; `heuristic` forces non-LLM analysis | API |
+| `ANALYSIS_MODEL` | `openai:gpt-4o-mini` | API |
+| `AUTH_ADMIN_USERNAME` | `admin` | API |
+| `AUTH_ADMIN_PASSWORD` | required | API |
+| `AUTH_VIEWER_USERNAME` | `viewer` | API |
+| `AUTH_VIEWER_PASSWORD` | required | API |
+| `AUTH_SECRET` | required session-signing secret | API |
+| `AUTH_SESSION_TTL_SECONDS` | `28800` (8 hours) | API |
+| `AUTH_COOKIE_SECURE` | `true`; Compose sets `false` | API |
+
+## Database migrations
+
+From `services/api`:
+
+```bash
+uv run alembic upgrade head
+uv run alembic revision --autogenerate -m "describe change"
+```
+
+## Verification
+
+```bash
+cd packages/contracts
+uv run pytest
+
+cd ../../services/api
+uv run pytest
+
+cd ../executor
+uv run pytest
+
+cd ../../apps/web
+npm run lint
+npm run build
+```
+
+The repository currently contains 93 Python tests: 13 contracts, 52 API, and 28 executor.
+
+## Delivery status
+
+| Area | Status |
+|------|--------|
+| Catalog, scenarios, Redis orchestration, pytest executor, worker pool | Done |
+| History, retention, trends, flakiness, fingerprints | Done |
+| Example UI/API/integration-style tests | Done |
+| Manual heuristic/AI analysis and export | Done |
+| Admin/viewer authentication and private API gateway | Done |
+| Responsive/mobile dashboard | Done |
+| Versioned test/step Console logs with TXT/JSON download | Done |
+| Public Railway HTTPS deployment with PostgreSQL, Redis, and bucket | Done |
+| Scheduling/CRON, CI event handshake/report-back, Kubernetes, self-heal | Backlog |
