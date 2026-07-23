@@ -31,8 +31,6 @@ class YoutubeVideo:
 class YoutubeChannelClient(Protocol):
     def fetch_feed_xml(self, context: StepContext) -> str: ...
 
-    def get_status(self, url: str, context: StepContext) -> int: ...
-
 
 class HttpxYoutubeChannelClient:
     def __init__(
@@ -69,41 +67,13 @@ class HttpxYoutubeChannelClient:
             response.raise_for_status()
             return response.text
 
-    def get_status(self, url: str, context: StepContext) -> int:
-        log = context.log
-        with log.scope(
-            "adapter",
-            f"GET video page {url}",
-            component="youtube_client",
-            event="video.get",
-            data={"url": url},
-        ):
-            with context.timed_action():
-                response = self._client.get(url)
-            log.log(
-                "framework",
-                f"video page {response.status_code}",
-                component="httpx",
-                event="http.response",
-                data={"status_code": response.status_code, "url": url},
-            )
-            return response.status_code
-
-
 class FakeYoutubeChannelClient:
-    def __init__(self, feed_xml: str = "", url_status: dict[str, int] | None = None) -> None:
+    def __init__(self, feed_xml: str = "") -> None:
         self.feed_xml = feed_xml
-        self.url_status = url_status or {}
 
     def fetch_feed_xml(self, context: StepContext) -> str:
         with context.timed_action():
             return self.feed_xml
-
-    def get_status(self, url: str, context: StepContext) -> int:
-        with context.timed_action():
-            if url not in self.url_status:
-                raise KeyError(f"no fake status for {url}")
-            return self.url_status[url]
 
 
 def parse_latest_video(feed_xml: str) -> YoutubeVideo:

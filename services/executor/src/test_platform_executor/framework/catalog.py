@@ -29,13 +29,13 @@ def catalog_definitions() -> list[TestDefinition]:
             id="youtube_ai_engineer_latest",
             name="YouTube AI Engineer latest",
             description=(
-                "Fetch AI Engineer channel RSS, take newest video, assert watch URL 200, "
+                "Fetch AI Engineer channel RSS, take newest video, validate its metadata, "
                 "write extractive summary from description"
             ),
             steps=[
                 "fetch_channel_feed",
                 "extract_latest_video",
-                "assert_latest_video",
+                "assert_latest_video_metadata",
                 "summarize_latest_video",
             ],
         ),

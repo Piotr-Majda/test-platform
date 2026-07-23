@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
+from urllib.parse import parse_qs, urlparse
+
 from test_platform_executor.framework.artifacts import ArtifactStrategy, NoArtifactStrategy
 from test_platform_executor.framework.context import StepContext
 from test_platform_executor.framework.step_decorator import step
@@ -70,40 +73,59 @@ class ExtractLatestVideoStep:
             )
 
 
-@step("assert_latest_video")
-class AssertLatestVideoStep:
-    """Confirm newest feed entry looks valid and the watch URL returns 200."""
+@step("assert_latest_video_metadata")
+class AssertLatestVideoMetadataStep:
+    """Confirm the newest RSS entry contains valid YouTube video metadata."""
 
     def __init__(
         self,
-        client: YoutubeChannelClient,
         artifact_strategy: ArtifactStrategy | None = None,
     ) -> None:
-        self._client = client
         self.artifact_strategy = artifact_strategy or NoArtifactStrategy()
 
     def execute(self, context: StepContext) -> None:
         with context.log.scope(
             "domain",
-            "Assert latest video metadata and page status",
-            component="assert_latest_video",
-            event="video.assert",
+            "Assert latest video metadata",
+            component="assert_latest_video_metadata",
+            event="video.metadata.assert",
         ):
             video: YoutubeVideo = context.get("youtube_latest_video")
+            if not video.video_id.strip():
+                raise StepFailedError(self.id, "latest video has no video ID")
+            if not video.title.strip():
+                raise StepFailedError(self.id, "latest video has no title")
             if not video.published:
                 raise StepFailedError(self.id, "latest video has no published timestamp")
-            status = self._client.get_status(video.url, context)
-            if status != 200:
+            try:
+                datetime.fromisoformat(video.published.replace("Z", "+00:00"))
+            except ValueError as exc:
                 raise StepFailedError(
                     self.id,
-                    f"expected HTTP 200 for latest video ({video.url}), got {status}",
-                )
+                    f"latest video has invalid published timestamp: {video.published}",
+                ) from exc
+
+            parsed_url = urlparse(video.url)
+            video_ids = parse_qs(parsed_url.query).get("v", [])
+            if (
+                parsed_url.scheme != "https"
+                or parsed_url.hostname not in {"youtube.com", "www.youtube.com"}
+                or parsed_url.path != "/watch"
+                or video.video_id not in video_ids
+            ):
+                raise StepFailedError(self.id, f"invalid YouTube watch URL: {video.url}")
+
             context.log.log(
                 "domain",
-                "Latest video page OK",
-                component="assert_latest_video",
-                event="video.ok",
-                data={"status_code": status, "published": video.published},
+                "Latest video metadata valid",
+                component="assert_latest_video_metadata",
+                event="video.metadata.valid",
+                data={
+                    "video_id": video.video_id,
+                    "title": video.title,
+                    "url": video.url,
+                    "published": video.published,
+                },
             )
 
 

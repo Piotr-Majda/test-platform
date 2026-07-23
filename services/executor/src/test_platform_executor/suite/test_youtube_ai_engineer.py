@@ -11,7 +11,7 @@ from test_platform_executor.framework.youtube_client import (
     HttpxYoutubeChannelClient,
 )
 from test_platform_executor.framework.youtube_steps import (
-    AssertLatestVideoStep,
+    AssertLatestVideoMetadataStep,
     ExtractLatestVideoStep,
     FetchChannelFeedStep,
     SummarizeLatestVideoStep,
@@ -37,10 +37,7 @@ _FAKE_FEED = """<?xml version="1.0" encoding="UTF-8"?>
 
 def _client():
     if os.getenv("PLATFORM_FAKE_YOUTUBE") == "1":
-        return FakeYoutubeChannelClient(
-            feed_xml=_FAKE_FEED,
-            url_status={"https://www.youtube.com/watch?v=fakeVideo1": 200},
-        )
+        return FakeYoutubeChannelClient(feed_xml=_FAKE_FEED)
     return HttpxYoutubeChannelClient()
 
 
@@ -53,5 +50,5 @@ def test_youtube_ai_engineer_latest(platform_emitter) -> None:
 
     FetchChannelFeedStep(client, artifact_strategy=strategy).execute(context)
     ExtractLatestVideoStep(artifact_strategy=strategy).execute(context)
-    AssertLatestVideoStep(client, artifact_strategy=strategy).execute(context)
+    AssertLatestVideoMetadataStep(artifact_strategy=strategy).execute(context)
     SummarizeLatestVideoStep(artifact_strategy=strategy).execute(context)

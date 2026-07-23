@@ -9,11 +9,12 @@ from test_platform_executor.framework.emission import set_emission_context
 from test_platform_executor.framework.steps import StepFailedError
 from test_platform_executor.framework.youtube_client import (
     FakeYoutubeChannelClient,
+    YoutubeVideo,
     extractive_summary,
     parse_latest_video,
 )
 from test_platform_executor.framework.youtube_steps import (
-    AssertLatestVideoStep,
+    AssertLatestVideoMetadataStep,
     ExtractLatestVideoStep,
     FetchChannelFeedStep,
     SummarizeLatestVideoStep,
@@ -76,15 +77,12 @@ def test_extractive_summary_prefers_description() -> None:
 
 
 def test_happy_path_fetch_extract_assert_summarize(emission: InMemoryProgressPublisher) -> None:
-    client = FakeYoutubeChannelClient(
-        feed_xml=SAMPLE_FEED,
-        url_status={"https://www.youtube.com/watch?v=abc123XYZ": 200},
-    )
+    client = FakeYoutubeChannelClient(feed_xml=SAMPLE_FEED)
     context = StepContext()
 
     FetchChannelFeedStep(client).execute(context)
     ExtractLatestVideoStep().execute(context)
-    AssertLatestVideoStep(client).execute(context)
+    AssertLatestVideoMetadataStep().execute(context)
     SummarizeLatestVideoStep().execute(context)
 
     assert "tool-calling" in context.get("youtube_summary")
@@ -92,19 +90,23 @@ def test_happy_path_fetch_extract_assert_summarize(emission: InMemoryProgressPub
     assert steps == {
         "fetch_channel_feed",
         "extract_latest_video",
-        "assert_latest_video",
+        "assert_latest_video_metadata",
         "summarize_latest_video",
     }
 
 
-def test_assert_fails_when_watch_url_not_200() -> None:
-    client = FakeYoutubeChannelClient(
-        feed_xml=SAMPLE_FEED,
-        url_status={"https://www.youtube.com/watch?v=abc123XYZ": 404},
-    )
+def test_assert_fails_when_watch_url_does_not_match_video_id() -> None:
     context = StepContext()
-    context.set("youtube_feed_xml", SAMPLE_FEED)
-    ExtractLatestVideoStep().execute(context)
+    context.set(
+        "youtube_latest_video",
+        YoutubeVideo(
+            video_id="abc123XYZ",
+            title="Building Agents with Tools",
+            url="https://www.youtube.com/watch?v=differentVideo",
+            published="2026-07-18T12:00:00+00:00",
+            description="Description",
+        ),
+    )
 
-    with pytest.raises(StepFailedError, match="404"):
-        AssertLatestVideoStep(client).execute(context)
+    with pytest.raises(StepFailedError, match="invalid YouTube watch URL"):
+        AssertLatestVideoMetadataStep().execute(context)
