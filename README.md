@@ -354,6 +354,47 @@ npm run build
 
 The repository currently contains 93 Python tests: 13 contracts, 52 API, and 28 executor.
 
+## Next development sequence
+
+The next work should improve execution correctness before adding more analytics UI:
+
+1. **Isolate pytest processes and separate outcomes**
+   - Run every pytest invocation in a dedicated child process instead of concurrent
+     `pytest.main()` calls sharing worker threads and module globals.
+   - Model the test result independently from execution health. A test may be `passed`,
+     `failed`, or `not_run`, while execution may separately report infrastructure failure,
+     timeout, cancellation, setup failure, or teardown failure.
+   - Store process exit code, setup/call/teardown diagnostics, stdout/stderr, and
+     infrastructure events. Test flakiness must count real test failures only.
+2. **Expand the representative test catalog**
+   - Add deterministic UI, API, integration, and component examples that produce enough
+     versioned history to demonstrate regressions, recurring failures, and flakiness.
+   - Keep external live tests as examples, but pair them with stable fake/local variants so
+     third-party availability does not control the whole demo.
+3. **Integrate unit-test results through the contracts**
+   - Support selected unit tests as normal discovered pytest tests when running them from the
+     platform is useful. Unit tests do not have to expose DDD steps; a test-level result is a
+     valid contract representation.
+   - For large unit suites, prefer CI-side execution and a versioned result-import contract
+     (for example JUnit plus SUT commit, environment, framework version, and timing metadata).
+     The platform should retain and analyze those results without replacing the fast native
+     unit-test workflow.
+   - Add catalog metadata such as `test_kind` (`unit`, `api`, `integration`, `ui`) and
+     `execution_mode` (`orchestrated`, `imported`) so analytics can compare like with like.
+4. **Add the quality overview dashboard**
+   - Make it the read-only Guest landing page.
+   - Show recent runs, pass rate, test-failure trend, infrastructure reliability, flaky
+     tests, recurring fingerprints, and scenarios requiring attention.
+   - Filter by time window, scenario, SUT version/environment, and framework version.
+   - Every metric or chart must link to its underlying run, test, or failure evidence.
+   - Implement it as a React page plus an aggregate FastAPI endpoint over existing
+     PostgreSQL data, not as a separate analytics service.
+
+This split keeps the platform useful for unit tests without forcing thousands of fast,
+low-level checks into step-oriented orchestration. UI/API/integration scenarios remain the
+richest source of step logs and artifacts, while unit-test reports strengthen cross-version
+quality history at much lower operational cost.
+
 ## Delivery status
 
 | Area | Status |
@@ -362,8 +403,9 @@ The repository currently contains 93 Python tests: 13 contracts, 52 API, and 28 
 | History, retention, trends, flakiness, fingerprints | Done |
 | Example UI/API/integration-style tests | Done |
 | Manual heuristic/AI analysis and export | Done |
-| Admin/viewer/guest authentication and private API gateway | Guest implemented; deployment verification pending |
-| Responsive/mobile dashboard | Done |
+| Admin/viewer/guest authentication and private API gateway | Done and verified on public deployment |
+| Responsive/mobile application UI | Done |
+| Cross-scenario quality overview dashboard | Backlog after execution isolation and richer history |
 | Versioned test/step Console logs with TXT/JSON download | Done |
 | Public Railway HTTPS deployment with PostgreSQL, Redis, and bucket | Done |
 | Scheduling/CRON, CI event handshake/report-back, Kubernetes, self-heal | Backlog |
